@@ -64,38 +64,24 @@ EventEase Backend is a Node.js-based REST API service designed for comprehensive
 
 ```
 EventEase-Backend/
-├── 📱 src/
-│   ├── 🔧 config/
-│   │   ├── database.js                # MongoDB connection
-│   │   └── email.js                   # Email configuration
-│   │
-│   ├── 🗂️ models/
-│   │   ├── User.js                    # User schema
-│   │   ├── Event.js                   # Event schema
-│   │   └── Booking.js                 # Booking schema
-│   │
-│   ├── 🛣️ routes/
-│   │   ├── auth.js                    # Authentication routes
-│   │   ├── events.js                  # Event routes
-│   │   └── bookings.js                # Booking routes
-│   │
-│   ├── 🎮 controllers/
-│   │   ├── authController.js          # Auth logic
-│   │   ├── eventController.js         # Event logic
-│   │   └── bookingController.js       # Booking logic
-│   │
-│   ├── 🛡️ middleware/
-│   │   ├── auth.js                    # JWT verification
-│   │   ├── validation.js              # Input validation
-│   │   └── errorHandler.js            # Error handling
-│   │
-│   └── 🔧 utils/
-│       ├── emailService.js            # Email utilities
-│       ├── otpGenerator.js            # OTP generation
-│       └── helpers.js                 # Helper functions
+├── 🔧 config/
+│   └── db.js                          # MongoDB connection
 │
-├── 📄 .env.example                    # Environment variables template
-├── 📄 server.js                       # App entry point
+├── 🗂️ models/
+│   ├── User.js                        # User schema
+│   ├── Event.js                       # Event schema
+│   └── Booking.js                     # Booking schema
+│
+├── 🛣️ routes/
+│   ├── auth.js                        # Authentication routes
+│   ├── events.js                      # Event routes
+│   └── bookings.js                    # Booking routes
+│
+├── 🛡️ middleware/
+│   └── middleware.js                  # JWT verification & error handling
+│
+├── 📄 .env                            # Environment variables
+├── 📄 app.js                          # App entry point
 └── 📄 package.json                    # Dependencies
 ```
 
