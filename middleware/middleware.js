@@ -62,7 +62,7 @@ const verifyToken = async (req, res, next) => {
 // Optional: Middleware to check if user is verified
 const requireVerified = (req, res, next) => {
   if (!req.user.isVerified) {
-    return res.status(403).json({
+    return res.status(403).json({ 
       success: false,
       message: 'Email verification required',
     });

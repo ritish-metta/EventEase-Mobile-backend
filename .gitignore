@@ -2,3 +2,5 @@
 
 # Node dependencies
 node_modules/
+
+backend/routes/childSafety.js

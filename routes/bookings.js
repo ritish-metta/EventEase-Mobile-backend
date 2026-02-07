@@ -4,7 +4,7 @@ const router = express.Router();
 const Booking = require('../models/Booking');
 const Event = require('../models/Event');
 const { verifyToken } = require('../middleware/middleware');
-
+   
 // POST create a new booking (protected - requires token)
 router.post('/', verifyToken, async (req, res) => {
   try { 
@@ -14,7 +14,7 @@ router.post('/', verifyToken, async (req, res) => {
     // Debug logging
     console.log('=== BOOKING DEBUG ===');
     console.log('userId:', userId);
-    console.log('user:', req.user);
+    console.log('user:', req.user); 
     console.log('Request body:', req.body);
     console.log('===================');
 
@@ -240,4 +240,4 @@ function generateBookingId() {
   return `BKG-${month}${year}-${randomStr}`;
 }
 
-module.exports = router;
+module.exports = router; 
