@@ -4,3 +4,4 @@
 node_modules/
 
 backend/routes/childSafety.js
+eventlistdashboard.html
