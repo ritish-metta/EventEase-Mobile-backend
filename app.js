@@ -6,6 +6,7 @@ const { connectDB, initializeWebSocket } = require('./config/db');
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
 const bookingsRouter = require('./routes/bookings');
+const childSafetyRoutes = require('./routes/childSafety');
 
 
 const app = express();
@@ -43,7 +44,7 @@ app.use(express.static('public'));
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/bookings', bookingsRouter);
-
+app.use('/api/child-safety', childSafetyRoutes);
 
 // Serve dashboard at root
 app.get('/', (req, res) => {
