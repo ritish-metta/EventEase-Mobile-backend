@@ -2,11 +2,12 @@ const mongoose = require('mongoose');
 const socketIO = require('socket.io');
 
 let io;
-const connectedDevices = new Map(); // Store connected devices: deviceId -> socketI
+const connectedDevices = new Map(); // Store connected devices: deviceId -> socketId
+const buzzerActiveDevices = new Set(); // Track which devices have active buzzers
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI  || 'mongodb://localhost:27017/eventease', {
+    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/eventease', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
@@ -37,7 +38,13 @@ const initializeWebSocket = (server) => {
         connectedDevices.set(deviceId, socket.id);
         console.log(`📱 Device registered: ${deviceId} -> ${socket.id}`);
         console.log(`📊 Total devices connected: ${connectedDevices.size}`);
-        
+
+        // If buzzer was active for this device before it disconnected, re-trigger it
+        if (buzzerActiveDevices.has(deviceId)) {
+          io.to(socket.id).emit('triggerBuzzer', { deviceId });
+          console.log(`🔊 Re-triggered buzzer for reconnected device: ${deviceId}`);
+        }
+
         // Notify dashboard about connected devices
         io.emit('deviceConnected', { deviceId, socketId: socket.id });
       }
@@ -47,26 +54,25 @@ const initializeWebSocket = (server) => {
     socket.on('triggerBuzzer', (data) => {
       const { deviceId } = data;
       console.log(`🔊 Dashboard triggered buzzer for: ${deviceId}`);
-      
+
       const deviceSocketId = connectedDevices.get(deviceId);
-      
+
       if (deviceSocketId) {
-        // Send buzzer trigger to specific device
         io.to(deviceSocketId).emit('triggerBuzzer', { deviceId });
+        buzzerActiveDevices.add(deviceId); // Track buzzer state
         console.log(`✓ Buzzer signal sent to device ${deviceId} (socket: ${deviceSocketId})`);
-        
-        // Confirm to dashboard
-        socket.emit('buzzerTriggered', { 
-          success: true, 
+
+        socket.emit('buzzerTriggered', {
+          success: true,
           deviceId,
-          message: 'Buzzer triggered successfully' 
+          message: 'Buzzer triggered successfully'
         });
       } else {
         console.log(`✗ Device ${deviceId} not connected`);
-        socket.emit('buzzerTriggered', { 
-          success: false, 
+        socket.emit('buzzerTriggered', {
+          success: false,
           deviceId,
-          message: 'Device not connected' 
+          message: 'Device not connected'
         });
       }
     });
@@ -75,26 +81,25 @@ const initializeWebSocket = (server) => {
     socket.on('stopBuzzer', (data) => {
       const { deviceId } = data;
       console.log(`🔇 Dashboard stopped buzzer for: ${deviceId}`);
-      
+
       const deviceSocketId = connectedDevices.get(deviceId);
-      
+      buzzerActiveDevices.delete(deviceId); // Clear buzzer state regardless
+
       if (deviceSocketId) {
-        // Send stop buzzer to specific device
         io.to(deviceSocketId).emit('stopBuzzer', { deviceId });
         console.log(`✓ Stop signal sent to device ${deviceId} (socket: ${deviceSocketId})`);
-        
-        // Confirm to dashboard
-        socket.emit('buzzerStopped', { 
-          success: true, 
+
+        socket.emit('buzzerStopped', {
+          success: true,
           deviceId,
-          message: 'Buzzer stopped successfully' 
+          message: 'Buzzer stopped successfully'
         });
       } else {
         console.log(`✗ Device ${deviceId} not connected`);
-        socket.emit('buzzerStopped', { 
-          success: false, 
+        socket.emit('buzzerStopped', {
+          success: false,
           deviceId,
-          message: 'Device not connected' 
+          message: 'Device not connected'
         });
       }
     });
@@ -102,11 +107,11 @@ const initializeWebSocket = (server) => {
     // 🚨 TRIGGER ALL BUZZERS (from dashboard)
     socket.on('triggerAllBuzzers', () => {
       console.log('🚨 Dashboard triggered ALL buzzers');
-      
+
       if (connectedDevices.size === 0) {
         console.log('✗ No devices connected');
-        socket.emit('allBuzzersTriggered', { 
-          success: false, 
+        socket.emit('allBuzzersTriggered', {
+          success: false,
           message: 'No devices connected',
           count: 0
         });
@@ -116,15 +121,15 @@ const initializeWebSocket = (server) => {
       let triggered = 0;
       connectedDevices.forEach((socketId, deviceId) => {
         io.to(socketId).emit('triggerBuzzer', { deviceId });
+        buzzerActiveDevices.add(deviceId); // Track all as active
         triggered++;
         console.log(`✓ Buzzer triggered for device: ${deviceId}`);
       });
 
       console.log(`✓ Triggered ${triggered} buzzers`);
-      
-      // Confirm to dashboard
-      socket.emit('allBuzzersTriggered', { 
-        success: true, 
+
+      socket.emit('allBuzzersTriggered', {
+        success: true,
         message: `Triggered ${triggered} devices`,
         count: triggered
       });
@@ -133,11 +138,11 @@ const initializeWebSocket = (server) => {
     // 🔇 STOP ALL BUZZERS (from dashboard)
     socket.on('stopAllBuzzers', () => {
       console.log('🔇 Dashboard stopped ALL buzzers');
-      
+
       if (connectedDevices.size === 0) {
         console.log('✗ No devices connected');
-        socket.emit('allBuzzersStopped', { 
-          success: false, 
+        socket.emit('allBuzzersStopped', {
+          success: false,
           message: 'No devices connected',
           count: 0
         });
@@ -151,11 +156,12 @@ const initializeWebSocket = (server) => {
         console.log(`✓ Buzzer stopped for device: ${deviceId}`);
       });
 
+      buzzerActiveDevices.clear(); // Clear all buzzer states
+
       console.log(`✓ Stopped ${stopped} buzzers`);
-      
-      // Confirm to dashboard
-      socket.emit('allBuzzersStopped', { 
-        success: true, 
+
+      socket.emit('allBuzzersStopped', {
+        success: true,
         message: `Stopped ${stopped} devices`,
         count: stopped
       });
@@ -163,15 +169,13 @@ const initializeWebSocket = (server) => {
 
     // 🔋 BATTERY UPDATE (from mobile device)
     socket.on('batteryUpdate', (data) => {
-      // Broadcast battery update to all dashboards
       io.emit('batteryUpdate', data);
     });
 
     // 📡 DISCONNECT
     socket.on('disconnect', () => {
       console.log(`✗ Disconnected: ${socket.id}`);
-      
-      // Remove device from connected list
+
       let disconnectedDeviceId = null;
       connectedDevices.forEach((socketId, deviceId) => {
         if (socketId === socket.id) {
@@ -183,14 +187,14 @@ const initializeWebSocket = (server) => {
       if (disconnectedDeviceId) {
         console.log(`📱 Device unregistered: ${disconnectedDeviceId}`);
         console.log(`📊 Total devices connected: ${connectedDevices.size}`);
-        
-        // Notify dashboard
+
+        // NOTE: We do NOT remove from buzzerActiveDevices on disconnect
+        // so that when the device reconnects, it will re-trigger the buzzer
         io.emit('deviceDisconnected', { deviceId: disconnectedDeviceId });
       }
     });
   });
 
-  // Return io instance for use in routes
   return io;
 };
 

@@ -3,8 +3,8 @@ const User = require('../models/User');
 
 // Verify JWT Token Middleware
 const verifyToken = async (req, res, next) => {
-  try {
-    // Get token from header
+  try { 
+    // Get token from header 
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
