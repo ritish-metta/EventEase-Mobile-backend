@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const socketIO = require('socket.io');
 
 let io;
-const connectedDevices = new Map(); // Store connected devices: deviceId -> socketId
+const connectedDevices = new Map(); // Store connected devices: deviceId -> socketI
 
 const connectDB = async () => {
   try {
