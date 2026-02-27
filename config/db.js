@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const socketIO = require('socket.io');
+const { initializeGame } = require('../routes/game'); // 🎮 Fast Finger Tap
 
 let io;
 const connectedDevices = new Map(); // Store connected devices: deviceId -> socketId
@@ -194,6 +195,9 @@ const initializeWebSocket = (server) => {
       }
     });
   });
+
+  // 🎮 Initialize Fast Finger Tap game
+  initializeGame(io);
 
   return io;
 };
