@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 const socketIO = require('socket.io');
 const { initializeGame } = require('../routes/game'); // 🎮 Fast Finger Tap
-
+const { initializeLaserGridSprint } = require('../routes/laser_grid_sprint');
+const { initializePhoneFootball } = require('../routes/phone_football');
 let io;
 const connectedDevices = new Map(); // Store connected devices: deviceId -> socketId
 const buzzerActiveDevices = new Set(); // Track which devices have active buzzers
@@ -30,8 +31,9 @@ const initializeWebSocket = (server) => {
   console.log('✓ WebSocket server initialized');
 
   io.on('connection', (socket) => {
+    initializePhoneFootball(io, socket);
     console.log(`✓ New connection: ${socket.id}`);
-
+initializeLaserGridSprint(io, socket);
     // 📱 DEVICE REGISTRATION
     socket.on('register', (data) => {
       const { deviceId } = data;
