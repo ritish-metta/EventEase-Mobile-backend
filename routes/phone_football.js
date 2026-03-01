@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// routes/phone_football.js  —  v2
-// NEW: pf_move (trackpad movement), solo practice mode, wider pitch,
-//      cross/header/press/intercept actions, stamina system
+// routes/phone_football.js  —  v3 FIXED
+// FIXES: second half mobile sync, auto-pickup radius, ball boundary, state refresh
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _nanoid;
@@ -16,10 +15,10 @@ function generateRoomId() {
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const PF_MAX_PLAYERS     = 6;
 const PF_MATCH_SECS      = 120;
-const PF_TICK_MS         = 80;          // ~12.5fps physics
+const PF_TICK_MS         = 80;
 const PF_COUNTDOWN_SECS  = 3;
-const PF_PITCH_W         = 140;         // WIDER pitch (was 100)
-const PF_PITCH_H         = 70;          // TALLER pitch (was 60)
+const PF_PITCH_W         = 140;
+const PF_PITCH_H         = 70;
 const PF_GOAL_Y_MIN      = 27;
 const PF_GOAL_Y_MAX      = 43;
 const PF_PLAYER_SPEED    = 4.2;
@@ -29,27 +28,31 @@ const PF_BALL_CROSS_SPEED= 12;
 const PF_BALL_SHOOT_SPEED= 16;
 const PF_BALL_FRICTION   = 0.90;
 const PF_TACKLE_RANGE    = 9;
+// FIX: Increased auto-pickup range so players can grab ball by walking near it
+const PF_PICKUP_RANGE    = 6.5;
 const PF_PASS_RANGE      = 50;
 const PF_STAMINA_MAX     = 100;
-const PF_STAMINA_SPRINT  = -18;   // per sprint action
-const PF_STAMINA_REGEN   = 0.8;   // per tick
+const PF_STAMINA_SPRINT  = -18;
+const PF_STAMINA_REGEN   = 0.8;
+
+// FIX: Ball hard boundaries (inside pitch lines, not at edge)
+const PF_BALL_BOUND_X_MIN = 1.5;
+const PF_BALL_BOUND_X_MAX = PF_PITCH_W - 1.5;
+const PF_BALL_BOUND_Y_MIN = 1.5;
+const PF_BALL_BOUND_Y_MAX = PF_PITCH_H - 1.5;
 
 const TEAM_COLORS = ['red','blue','green','yellow','purple','orange'];
 const TEAM_NAMES  = ['REDS','BLUES','GREENS','YELLOWS','PURPLES','ORANGES'];
 
-// Wider pitch starting positions
 const START_POS_A = [[28,22],[28,48],[38,35]];
 const START_POS_B = [[112,22],[112,48],[102,35]];
 
-// ─── AI DIFFICULTY TIERS ─────────────────────────────────────────────────────
-const AI_MOVE_SPEED_MULT = 0.72;  // AI is slightly slower than max player speed
-const AI_SHOOT_DIST      = 35;    // max dist to attempt shot
-const AI_REACTION_MS     = 600;   // AI reacts every N ms
+const AI_MOVE_SPEED_MULT = 0.72;
+const AI_SHOOT_DIST      = 35;
+const AI_REACTION_MS     = 600;
 
-// ─── ROOM STORE ──────────────────────────────────────────────────────────────
 const pfRooms = new Map();
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function dist(ax, ay, bx, by) { return Math.sqrt((ax-bx)**2 + (ay-by)**2); }
 function rand(min, max) { return min + Math.random() * (max - min); }
@@ -63,9 +66,7 @@ function createPfPlayer(name, socketId, teamId, slot, isHost = false, isAI = fal
     goals: 0, tackles: 0, passes: 0, shots: 0,
     lastAction: 0,
     stamina: PF_STAMINA_MAX,
-    // Input from trackpad (set by pf_move)
     inputDx: 0, inputDy: 0,
-    // AI state
     aiTarget: null, aiLastThink: 0,
   };
 }
@@ -91,17 +92,13 @@ function createRoom(hostName, hostSocketId, soloMode = false) {
 }
 
 function addAIPlayers(room) {
-  // Add AI for team B (3 players) and optionally fill team A gaps
   const aCount = [...room.players.values()].filter(p => p.teamId === 'A').length;
   const bCount = [...room.players.values()].filter(p => p.teamId === 'B').length;
-
-  // Fill team B with AI
   for (let i = bCount; i < 3; i++) {
     const aiId = `ai_b_${i}_${Date.now()}`;
     const ai   = createPfPlayer(`AI-${i+1}`, aiId, 'B', i, false, true);
     room.players.set(aiId, ai);
   }
-  // Fill team A gaps too if solo
   for (let i = aCount; i < 3; i++) {
     const aiId = `ai_a_${i}_${Date.now()}`;
     const ai   = createPfPlayer(`BOT-${i+1}`, aiId, 'A', i, false, true);
@@ -154,7 +151,7 @@ function buildGameState(room) {
       x: p.x, y: p.y, vx: p.vx, vy: p.vy,
       hasBall: p.hasBall, sprintActive: p.sprintActive,
       goals: p.goals, tackles: p.tackles, passes: p.passes,
-      stamina: p.stamina, isAI: p.isAI,
+      stamina: p.stamina, isAI: p.isAI, slot: p.slot,
     })),
     teamA: room.teamA, teamB: room.teamB,
   };
@@ -164,27 +161,19 @@ function buildGameState(room) {
 function tickAI(io, room, p) {
   const ball = room.ball;
   const now  = Date.now();
-
   if (now - p.aiLastThink < AI_REACTION_MS) return;
   p.aiLastThink = now;
 
   const isAttacker  = p.slot === 2;
   const isMidfield  = p.slot === 1;
   const isDefender  = p.slot === 0;
-  const enemyTeam   = p.teamId === 'A' ? 'B' : 'A';
   const goalX       = p.teamId === 'A' ? PF_PITCH_W - 2 : 2;
   const goalY       = PF_PITCH_H / 2;
-
-  // Home position (return here when not active)
-  const homePosA = START_POS_A[p.slot];
-  const homePosB = START_POS_B[p.slot];
-  const homePos  = p.teamId === 'A' ? homePosA : homePosB;
+  const homePos     = p.teamId === 'A' ? START_POS_A[p.slot] : START_POS_B[p.slot];
 
   if (p.hasBall) {
-    // AI has ball — decide: shoot or pass?
     const dToGoal = dist(p.x, p.y, goalX, goalY);
     if (dToGoal < AI_SHOOT_DIST && Math.random() > 0.4) {
-      // Shoot!
       const dx = goalX - ball.x;
       const dy = goalY - ball.y + rand(-5, 5);
       const d  = Math.sqrt(dx*dx + dy*dy) || 1;
@@ -194,22 +183,17 @@ function tickAI(io, room, p) {
       p.shots++;
       io.to(room.roomId).emit('pf_shot', { playerId: p.id, name: p.name, team: p.teamId });
     } else {
-      // Dribble toward goal
       const dx = goalX - p.x; const dy = goalY - p.y;
       const d  = Math.sqrt(dx*dx + dy*dy) || 1;
-      const spd = PF_PLAYER_SPEED * AI_MOVE_SPEED_MULT;
       p.inputDx = (dx/d); p.inputDy = (dy/d);
     }
   } else {
-    // No ball — move toward it if close enough to role
     const dToBall = dist(p.x, p.y, ball.x, ball.y);
     const shouldChase = isAttacker || (isMidfield && dToBall < 40) || (isDefender && dToBall < 25);
-
     if (shouldChase) {
       const dx = ball.x - p.x; const dy = ball.y - p.y;
       const d  = Math.sqrt(dx*dx + dy*dy) || 1;
       p.inputDx = dx/d; p.inputDy = dy/d;
-      // Attempt tackle if close
       if (dToBall < PF_TACKLE_RANGE) {
         const owner = room.players.get(ball.ownerId);
         if (owner && owner.teamId !== p.teamId && Math.random() > 0.5) {
@@ -220,7 +204,6 @@ function tickAI(io, room, p) {
         }
       }
     } else {
-      // Drift toward home position
       const dx = homePos[0] - p.x; const dy = homePos[1] - p.y;
       const d  = Math.sqrt(dx*dx + dy*dy) || 1;
       p.inputDx = d > 5 ? dx/d * 0.5 : 0;
@@ -248,12 +231,11 @@ function resetPositions(room) {
 
 function tickPhysics(io, room) {
   const ball = room.ball;
-  const now  = Date.now();
 
   // AI think
   room.players.forEach(p => { if (p.isAI) tickAI(io, room, p); });
 
-  // Move players based on input (trackpad dx/dy)
+  // Move players
   room.players.forEach(p => {
     const mag = Math.sqrt(p.inputDx**2 + p.inputDy**2);
     if (mag > 0.05) {
@@ -268,11 +250,9 @@ function tickPhysics(io, room) {
     p.y = clamp(p.y + p.vy, 2, PF_PITCH_H - 2);
     p.vx *= 0.82; p.vy *= 0.82;
 
-    // Stamina
     if (p.sprintActive && !p.isAI) p.stamina = Math.max(0, p.stamina - 0.3);
     else p.stamina = Math.min(PF_STAMINA_MAX, p.stamina + PF_STAMINA_REGEN);
 
-    // Drag ball with owner
     if (p.hasBall) {
       ball.x = p.x + (p.teamId === 'A' ? 2.5 : -2.5);
       ball.y = p.y;
@@ -288,29 +268,37 @@ function tickPhysics(io, room) {
     ball.vx *= PF_BALL_FRICTION;
     ball.vy *= PF_BALL_FRICTION;
 
-    // Wall bounce
-    if (ball.y <= 1)              { ball.y = 1;               ball.vy *= -0.65; }
-    if (ball.y >= PF_PITCH_H - 1) { ball.y = PF_PITCH_H - 1; ball.vy *= -0.65; }
+    // FIX: Hard wall bounces - ball CANNOT leave pitch bounds
+    if (ball.y <= PF_BALL_BOUND_Y_MIN) {
+      ball.y = PF_BALL_BOUND_Y_MIN;
+      ball.vy = Math.abs(ball.vy) * 0.65; // always bounce inward
+    }
+    if (ball.y >= PF_BALL_BOUND_Y_MAX) {
+      ball.y = PF_BALL_BOUND_Y_MAX;
+      ball.vy = -Math.abs(ball.vy) * 0.65;
+    }
 
     // Left wall / left goal
-    if (ball.x <= 0) {
+    if (ball.x <= PF_BALL_BOUND_X_MIN) {
       if (ball.y >= PF_GOAL_Y_MIN && ball.y <= PF_GOAL_Y_MAX) {
         scoreGoal(io, room, 'B', null);
         return;
       }
-      ball.x = 1; ball.vx *= -0.6;
+      ball.x = PF_BALL_BOUND_X_MIN;
+      ball.vx = Math.abs(ball.vx) * 0.6; // bounce inward
     }
     // Right wall / right goal
-    if (ball.x >= PF_PITCH_W) {
+    if (ball.x >= PF_BALL_BOUND_X_MAX) {
       if (ball.y >= PF_GOAL_Y_MIN && ball.y <= PF_GOAL_Y_MAX) {
         scoreGoal(io, room, 'A', null);
         return;
       }
-      ball.x = PF_PITCH_W - 1; ball.vx *= -0.6;
+      ball.x = PF_BALL_BOUND_X_MAX;
+      ball.vx = -Math.abs(ball.vx) * 0.6;
     }
 
-    // Auto pickup
-    let closest = null; let closestDist = 5.5;
+    // FIX: Auto pickup with increased range - walk near ball to pick it up
+    let closest = null; let closestDist = PF_PICKUP_RANGE;
     room.players.forEach(p => {
       const d = dist(p.x, p.y, ball.x, ball.y);
       if (d < closestDist) { closestDist = d; closest = p; }
@@ -318,6 +306,8 @@ function tickPhysics(io, room) {
     if (closest) {
       closest.hasBall = true;
       ball.ownerId = closest.id;
+      ball.x = closest.x + (closest.teamId === 'A' ? 2.5 : -2.5);
+      ball.y = closest.y;
       if (!closest.isAI) {
         io.to(closest.socketId).emit('pf_you_have_ball', {});
       }
@@ -346,19 +336,14 @@ function scoreGoal(io, room, teamId, scorerId) {
   const scorer = scorerId ? room.players.get(scorerId) : null;
   if (scorer) scorer.goals++;
 
-  io.to(room.roomId).emit('pf_goal', {
+  const goalData = {
     team: teamId,
     scorer: scorer ? scorer.name : null,
     scoreA: room.teamA.score,
     scoreB: room.teamB.score,
-  });
+  };
 
-  room.players.forEach(p => {
-    if (!p.isAI) io.to(p.socketId).emit('pf_goal', {
-      team: teamId, scorer: scorer?.name,
-      scoreA: room.teamA.score, scoreB: room.teamB.score,
-    });
-  });
+  io.to(room.roomId).emit('pf_goal', goalData);
 
   setTimeout(() => {
     if (room.phase === 'playing') {
@@ -386,7 +371,7 @@ function startCountdown(io, room) {
 
 function startMatch(io, room) {
   room.phase = 'playing';
-  room.timeLeft = room.soloMode ? 99999 : PF_MATCH_SECS; // unlimited in solo
+  room.timeLeft = room.soloMode ? 99999 : PF_MATCH_SECS;
   room.half = 1;
   room.teamA.score = 0; room.teamB.score = 0;
   resetPositions(room);
@@ -410,13 +395,21 @@ function startMatchTimer(io, room) {
 function startHalftime(io, room) {
   clearInterval(room.tickInterval);
   room.phase = 'halftime';
-  io.to(room.roomId).emit('pf_halftime', { scoreA: room.teamA.score, scoreB: room.teamB.score });
+  io.to(room.roomId).emit('pf_halftime', {
+    scoreA: room.teamA.score,
+    scoreB: room.teamB.score,
+    half: 1,
+  });
   setTimeout(() => {
     if (room.phase !== 'halftime') return;
-    room.phase = 'playing'; room.half = 2;
+    room.phase = 'playing';
+    room.half = 2;
     room.timeLeft = PF_MATCH_SECS;
     resetPositions(room);
-    io.to(room.roomId).emit('pf_second_half', buildGameState(room));
+    const state = buildGameState(room);
+    // FIX: Emit pf_second_half AND pf_game_start so mobile re-enters playing state
+    io.to(room.roomId).emit('pf_second_half', state);
+    io.to(room.roomId).emit('pf_game_start', state); // mobile listens to this
     startTick(io, room);
     startMatchTimer(io, room);
   }, 8000);
@@ -469,7 +462,6 @@ function handleLeave(io, socket, roomId) {
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 function initializePhoneFootball(io, socket) {
 
-  // ── CREATE ROOM ────────────────────────────────────────────────────────────
   socket.on('pf_create_room', ({ name, soloMode = false }) => {
     if (!name || typeof name !== 'string') return;
     const { roomId, room } = createRoom(name.trim().slice(0, 20), socket.id, soloMode);
@@ -479,7 +471,6 @@ function initializePhoneFootball(io, socket) {
     console.log(`⚽ PF room created: ${roomId} by ${name}${soloMode ? ' [SOLO]' : ''}`);
   });
 
-  // ── JOIN ROOM ──────────────────────────────────────────────────────────────
   socket.on('pf_join_room', ({ name, roomId }) => {
     if (!name || !roomId) return;
     const isSpectator = typeof name === 'string' && name.startsWith('_DASH_');
@@ -508,24 +499,32 @@ function initializePhoneFootball(io, socket) {
     if (!isSpectator) {
       io.to(room.roomId).emit('pf_lobby', buildLobbyState(room));
     } else {
+      // FIX: Spectator gets current state regardless of phase
       if (room.phase === 'lobby')   socket.emit('pf_lobby', buildLobbyState(room));
-      if (room.phase === 'playing') socket.emit('pf_game_start', buildGameState(room));
-      if (room.phase === 'finished') socket.emit('pf_finished', { winner: 'draw', scoreA: room.teamA.score, scoreB: room.teamB.score });
+      if (room.phase === 'playing' || room.phase === 'countdown') {
+        socket.emit('pf_game_start', buildGameState(room));
+      }
+      if (room.phase === 'halftime') {
+        socket.emit('pf_halftime', { scoreA: room.teamA.score, scoreB: room.teamB.score });
+      }
+      if (room.phase === 'finished') {
+        socket.emit('pf_finished', {
+          winner: room.teamA.score > room.teamB.score ? 'A' : room.teamB.score > room.teamA.score ? 'B' : 'draw',
+          scoreA: room.teamA.score, scoreB: room.teamB.score,
+          teamA: room.teamA, teamB: room.teamB,
+        });
+      }
     }
   });
 
-  // ── START GAME ─────────────────────────────────────────────────────────────
   socket.on('pf_start_game', ({ roomId }) => {
     const room = pfRooms.get(roomId);
     if (!room) return;
     const player = room.players.get(socket.id);
     if (!player?.isHost) { socket.emit('pf_error', { message: 'Only host can start.' }); return; }
     if (room.phase !== 'lobby') return;
-    // Add AI players if needed
     if (room.soloMode || room.players.size < 2) addAIPlayers(room);
     else {
-      // Fill empty team slots with AI for balance
-      const aCount = [...room.players.values()].filter(p => p.teamId === 'A' && !p.isAI).length;
       const bCount = [...room.players.values()].filter(p => p.teamId === 'B' && !p.isAI).length;
       if (bCount === 0) {
         for (let i = 0; i < 3; i++) {
@@ -537,18 +536,15 @@ function initializePhoneFootball(io, socket) {
     startCountdown(io, room);
   });
 
-  // ── TRACKPAD MOVEMENT ──────────────────────────────────────────────────────
   socket.on('pf_move', ({ roomId, dx, dy }) => {
     const room = pfRooms.get(roomId);
     if (!room || room.phase !== 'playing') return;
     const player = room.players.get(socket.id);
     if (!player) return;
-    // Store input; physics tick applies it
     player.inputDx = clamp(dx, -1, 1);
     player.inputDy = clamp(dy, -1, 1);
   });
 
-  // Stop moving when trackpad released
   socket.on('pf_move_stop', ({ roomId }) => {
     const room = pfRooms.get(roomId);
     if (!room) return;
@@ -557,7 +553,6 @@ function initializePhoneFootball(io, socket) {
     player.inputDx = 0; player.inputDy = 0;
   });
 
-  // ── PLAYER ACTIONS ─────────────────────────────────────────────────────────
   socket.on('pf_action', ({ roomId, action, direction }) => {
     const room = pfRooms.get(roomId);
     if (!room || room.phase !== 'playing') return;
@@ -596,7 +591,6 @@ function initializePhoneFootball(io, socket) {
       }
 
     } else if (action === 'cross' && player.hasBall) {
-      // High cross to the far side
       const targetX = player.teamId === 'A' ? PF_PITCH_W * 0.8 : PF_PITCH_W * 0.2;
       const targetY = ball.y > PF_PITCH_H / 2 ? PF_PITCH_H * 0.3 : PF_PITCH_H * 0.7;
       const dx = targetX - ball.x; const dy = targetY - ball.y;
@@ -618,31 +612,6 @@ function initializePhoneFootball(io, socket) {
       ball.vy = (dy/d) * PF_BALL_SHOOT_SPEED;
       player.shots++;
       io.to(room.roomId).emit('pf_shot', { playerId: player.id, name: player.name, team: player.teamId });
-
-    } else if (action === 'header' || action === 'chest') {
-      // Aerial challenge — redirect ball toward goal
-      if (ball.ownerId && room.players.get(ball.ownerId)?.teamId !== player.teamId) {
-        const dToBall = dist(player.x, player.y, ball.x, ball.y);
-        if (dToBall < 12) {
-          room.players.get(ball.ownerId).hasBall = false;
-          ball.ownerId = null;
-          const goalX = player.teamId === 'A' ? PF_PITCH_W : 0;
-          const dx = goalX - ball.x; const dy = -2 + (Math.random()-0.5)*5;
-          const d  = Math.sqrt(dx*dx + dy*dy)||1;
-          ball.vx = (dx/d)*10; ball.vy = (dy/d)*10;
-          io.to(room.roomId).emit('pf_tackle_event', { tackler: player.name, tackled: room.players.get(ball.ownerId)?.name || '?' });
-        }
-      } else if (!ball.ownerId) {
-        const dToBall = dist(player.x, player.y, ball.x, ball.y);
-        if (dToBall < 10) {
-          const goalX = player.teamId === 'A' ? PF_PITCH_W : 0;
-          const dx = goalX - ball.x;
-          const d  = Math.abs(dx) || 1;
-          ball.vx = (dx/d)*11; ball.vy = (Math.random()-0.5)*4;
-          player.shots++;
-          io.to(room.roomId).emit('pf_shot', { playerId: player.id, name: player.name, team: player.teamId });
-        }
-      }
 
     } else if (action === 'tackle' && !player.hasBall) {
       let tackled = null; let tDist = PF_TACKLE_RANGE;
@@ -675,7 +644,6 @@ function initializePhoneFootball(io, socket) {
       }
 
     } else if (action === 'press') {
-      // Find closest opponent and move toward them
       let closestOpp = null; let cDist = 25;
       room.players.forEach(p => {
         if (p.teamId === player.teamId) return;
@@ -690,7 +658,6 @@ function initializePhoneFootball(io, socket) {
       }
 
     } else if (action === 'intercept') {
-      // Move to intercept ball's predicted path
       const predX = ball.x + ball.vx * 4;
       const predY = ball.y + ball.vy * 4;
       const dx = predX - player.x; const dy = predY - player.y;
@@ -700,7 +667,19 @@ function initializePhoneFootball(io, socket) {
     }
   });
 
-  // ── RESET ──────────────────────────────────────────────────────────────────
+  // FIX: Request state sync - mobile can ask for current state after refresh
+  socket.on('pf_request_state', ({ roomId }) => {
+    const room = pfRooms.get(roomId);
+    if (!room) return;
+    if (room.phase === 'playing') {
+      socket.emit('pf_game_start', buildGameState(room));
+    } else if (room.phase === 'halftime') {
+      socket.emit('pf_halftime', { scoreA: room.teamA.score, scoreB: room.teamB.score });
+    } else if (room.phase === 'lobby') {
+      socket.emit('pf_lobby', buildLobbyState(room));
+    }
+  });
+
   socket.on('pf_reset', ({ roomId }) => {
     const room = pfRooms.get(roomId);
     if (!room) return;
@@ -709,7 +688,6 @@ function initializePhoneFootball(io, socket) {
     clearInterval(room.tickInterval);
     clearInterval(room.countdownInterval);
     clearInterval(room.halfTimer);
-    // Remove AI players for lobby
     for (const [id, p] of room.players) {
       if (p.isAI) room.players.delete(id);
     }
@@ -720,12 +698,11 @@ function initializePhoneFootball(io, socket) {
     io.to(room.roomId).emit('pf_lobby', buildLobbyState(room));
   });
 
-  // ── LEAVE / DISCONNECT ─────────────────────────────────────────────────────
   socket.on('pf_leave', ({ roomId }) => handleLeave(io, socket, roomId));
   socket.on('disconnect', () => {
     const found = getRoomOfSocket(socket.id);
     if (found) handleLeave(io, socket, found.roomId);
   });
-}
+} 
 
 module.exports = { initializePhoneFootball };
