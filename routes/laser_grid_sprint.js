@@ -2,14 +2,14 @@
 // routes/laser_grid_sprint.js
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── nanoid safe load (works for v3 CommonJS AND v4+ ESM) ─────────────────────
-let _nanoid;
-try {
-  _nanoid = require('nanoid').nanoid; // nanoid@3
-} catch (e) {
-  _nanoid = null;
+// ── nanoid safe load (works for v3 CommonJS AND v4+ ESM) ───────────────────── 
+let _nanoid;  
+try { 
+  _nanoid = require('nanoid').nanoid; // nanoid@3 
+} catch (e) { 
+  _nanoid = null;  
 }
-
+  
 function generateRoomId() {
   if (_nanoid) return _nanoid(6).toUpperCase();
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

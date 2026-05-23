@@ -7,56 +7,55 @@ const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
 const bookingsRouter = require('./routes/bookings');
 const childSafetyRoutes = require('./routes/childSafety');
-
+const yogaRoutes = require('./routes/yoga');
+const pmjSmsRoutes = require('./routes/pmj_sms_route');
 
 const app = express();
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to Database
-connectDB();
-
-// Initialize WebSocket BEFORE routes
 const io = initializeWebSocket(server);
 
-// Middleware
 app.use(express.json());
 
-// CORS Middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, ngrok-skip-browser-warning');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-// Attach WebSocket to requests (for battery updates)
+
+
+
+
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// Serve static files (dashboard HTML)
-app.use(express.static('public'));
 
-// API Routes
+
+app.use(express.static('public')); 
+
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/child-safety', childSafetyRoutes);
+app.use('/api/yoga', yogaRoutes);
+app.use('/api/pmj-sms', pmjSmsRoutes);
 
-// Serve dashboard at root
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'child-safety-dashboard.html'));
 });
 
-// API Info endpoint
 app.get('/api', (req, res) => {
   res.json({
     message: 'EventEase API with Child Safety Monitoring',
     version: '1.0.0',
-    websocket: 'Active ✓',
+    websocket: 'Active',
     endpoints: {
       dashboard: 'GET / (Child Safety Dashboard)',
       public: {
@@ -93,53 +92,44 @@ app.get('/api', (req, res) => {
           'stopAllBuzzers - Stop all device buzzers',
           'batteryUpdate - Real-time battery updates',
           'deviceConnected - Device connection notification',
-          'deviceDisconnected - Device disconnection notification',
-        ]
-      }
+          'deviceDisconnected - Device connection notification',
+        ],
+      },
     },
   });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.stack);
+  console.error('Error:', err.stack);
   res.status(500).json({
     success: false,
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
   });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Endpoint not found'
+    message: 'Endpoint not found',
   });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log('\n╔════════════════════════════════════════════╗');
-  console.log('║   🚀 Server Running Successfully          ║');
-  console.log('╠════════════════════════════════════════════╣');
-  console.log(`║   HTTP + WebSocket: http://localhost:${PORT}  ║`);
-  console.log(`║   Dashboard: http://localhost:${PORT}/         ║`);
-  console.log(`║   API Info: http://localhost:${PORT}/api       ║`);
-  console.log('╠════════════════════════════════════════════╣');
-  console.log('║   📊 Child Safety Features:               ║');
-  console.log('║   ✓ Real-time battery monitoring          ║');
-  console.log('║   ✓ Remote buzzer control                 ║');
-  console.log('║   ✓ Contact tracking                      ║');
-  console.log('║   ✓ WebSocket live updates                ║');
-  console.log('╚════════════════════════════════════════════╝\n');
-});
+const startServer = async () => {
+  await connectDB();
 
-// Handle server shutdown gracefully
+  server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`API info available at http://localhost:${PORT}/api`);
+  });
+};
+
+startServer();
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);
   });
-});  
+});

@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EventHub Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --card:      #16161f;
+      --border:    #1e1e2e;
+      --accent:    #e8ff47;
+      --accent2:   #ff4d6d;
+      --accent3:   #4dffb4;
+      --text:      #e8e8f0;
+      --muted:     #5a5a7a;
+      --tag-bg:    #1a1a28;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+      --radius:    12px;
+      --glow:      0 0 30px rgba(232,255,71,0.08);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── GRID NOISE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 40px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── LAYOUT ─── */
+    .layout { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 28px 0;
+      position: sticky; top: 0; height: 100vh;
+    }
+
+    .logo {
+      padding: 0 24px 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .logo-mark {
+      font-family: var(--font-head);
+      font-size: 20px; font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    .logo-mark span { color: var(--accent); }
+    .logo-sub {
+      font-size: 10px; color: var(--muted);
+      letter-spacing: 2px; text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    .nav { flex: 1; padding: 0 12px; }
+    .nav-section-label {
+      font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--muted); padding: 0 12px; margin: 16px 0 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: all 0.2s; border: 1px solid transparent;
+      margin-bottom: 2px; user-select: none;
+    }
+    .nav-item:hover { color: var(--text); background: var(--card); }
+    .nav-item.active {
+      color: var(--accent); background: rgba(232,255,71,0.06);
+      border-color: rgba(232,255,71,0.15);
+    }
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+    .nav-badge {
+      margin-left: auto; background: var(--accent2);
+      color: #fff; font-size: 9px; padding: 2px 6px;
+      border-radius: 20px; font-weight: 500;
+    }
+
+    .sidebar-footer {
+      padding: 20px 24px 0;
+      border-top: 1px solid var(--border);
+    }
+    .user-chip {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #0a0a0f;
+    }
+    .user-name { font-size: 12px; font-weight: 500; }
+    .user-role { font-size: 10px; color: var(--muted); }
+
+    /* ─── MAIN ─── */
+    .main { flex: 1; padding: 32px 36px; overflow-y: auto; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .page-title {
+      font-family: var(--font-head);
+      font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+    }
+    .page-title span { color: var(--accent); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 8px; font-family: var(--font-mono);
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      border: 1px solid transparent; transition: all 0.2s; white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent); color: #0a0a0f;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #d4eb00; box-shadow: 0 0 20px rgba(232,255,71,0.3); }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-outline:hover { border-color: var(--muted); background: var(--card); }
+    .btn-danger {
+      background: transparent; color: var(--accent2);
+      border-color: rgba(255,77,109,0.3); font-size: 11px; padding: 6px 12px;
+    }
+    .btn-danger:hover { background: rgba(255,77,109,0.1); }
+
+    /* ─── STAT CARDS ─── */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 22px;
+      position: relative; overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+    .stat-card:nth-child(1) { animation-delay: 0.05s; }
+    .stat-card:nth-child(2) { animation-delay: 0.10s; }
+    .stat-card:nth-child(3) { animation-delay: 0.15s; }
+    .stat-card:nth-child(4) { animation-delay: 0.20s; }
+
+    .stat-card::after {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .stat-card.c1::after { background: var(--accent); }
+    .stat-card.c2::after { background: var(--accent2); }
+    .stat-card.c3::after { background: var(--accent3); }
+    .stat-card.c4::after { background: #a78bfa; }
+
+    .stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .stat-value { font-family: var(--font-head); font-size: 34px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
+    .stat-card.c1 .stat-value { color: var(--accent); }
+    .stat-card.c2 .stat-value { color: var(--accent2); }
+    .stat-card.c3 .stat-value { color: var(--accent3); }
+    .stat-card.c4 .stat-value { color: #a78bfa; }
+    .stat-delta { font-size: 11px; color: var(--muted); }
+    .stat-delta .up { color: var(--accent3); }
+    .stat-delta .down { color: var(--accent2); }
+
+    /* ─── SECTION HEADER ─── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: var(--font-head); font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::before {
+      content: ''; width: 4px; height: 18px;
+      background: var(--accent); border-radius: 2px; display: block;
+    }
+    .section-controls { display: flex; gap: 8px; align-items: center; }
+
+    /* ─── SEARCH + FILTER ─── */
+    .search-box {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 12px;
+      color: var(--text); width: 220px;
+    }
+    .search-box input {
+      background: none; border: none; outline: none;
+      color: var(--text); font-family: var(--font-mono); font-size: 12px; width: 100%;
+    }
+    .search-box input::placeholder { color: var(--muted); }
+    .search-icon { color: var(--muted); font-size: 13px; }
+
+    .filter-select {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; color: var(--text);
+      font-family: var(--font-mono); font-size: 12px; cursor: pointer; outline: none;
+    }
+
+    /* ─── EVENTS TABLE ─── */
+    .table-wrap {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 28px;
+      animation: fadeUp 0.4s ease 0.25s both;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--surface); padding: 12px 18px;
+      text-align: left; font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--border); font-weight: 500;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.025); }
+    td { padding: 14px 18px; font-size: 13px; vertical-align: middle; }
+
+    .event-thumb {
+      width: 42px; height: 42px; border-radius: 8px;
+      object-fit: cover; background: var(--border);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .event-info { display: flex; align-items: center; gap: 12px; }
+    .event-name { font-weight: 500; font-size: 13px; margin-bottom: 2px; }
+    .event-loc { font-size: 11px; color: var(--muted); }
+
+    .tag {
+      display: inline-block; padding: 3px 10px; border-radius: 20px;
+      font-size: 10px; font-weight: 500; letter-spacing: 0.5px;
+      background: var(--tag-bg); border: 1px solid var(--border);
+    }
+    .tag.music    { color: #a78bfa; border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.08); }
+    .tag.tech     { color: var(--accent3); border-color: rgba(77,255,180,0.3); background: rgba(77,255,180,0.08); }
+    .tag.food     { color: #fb923c; border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.08); }
+    .tag.sports   { color: var(--accent2); border-color: rgba(255,77,109,0.3); background: rgba(255,77,109,0.08); }
+    .tag.art      { color: #60a5fa; border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.08); }
+    .tag.business { color: var(--accent); border-color: rgba(232,255,71,0.3); background: rgba(232,255,71,0.08); }
+
+    .status-dot {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px;
+    }
+    .status-dot::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+    }
+    .status-dot.active { color: var(--accent3); }
+    .status-dot.active::before { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+    .status-dot.sold-out { color: var(--accent2); }
+    .status-dot.sold-out::before { background: var(--accent2); }
+    .status-dot.upcoming { color: #a78bfa; }
+    .status-dot.upcoming::before { background: #a78bfa; }
+
+    .seats-bar { display: flex; flex-direction: column; gap: 4px; min-width: 90px; }
+    .seats-text { font-size: 11px; color: var(--muted); }
+    .bar-track {
+      height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+    .bar-fill.low  { background: var(--accent3); }
+    .bar-fill.mid  { background: var(--accent); }
+    .bar-fill.high { background: var(--accent2); }
+
+    .price-cell { font-family: var(--font-head); font-weight: 700; font-size: 14px; color: var(--accent); }
+
+    .actions { display: flex; gap: 6px; }
+    .icon-btn {
+      width: 30px; height: 30px; border-radius: 6px; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 13px;
+      cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+      color: var(--muted); transition: all 0.15s;
+    }
+    .icon-btn:hover { background: var(--card); color: var(--text); border-color: var(--muted); }
+    .icon-btn.del:hover { color: var(--accent2); border-color: rgba(255,77,109,0.4); }
+
+    /* ─── BOOKINGS SECTION ─── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    .booking-list {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      animation: fadeUp 0.4s ease 0.3s both;
+    }
+    .booking-list-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .booking-item {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+      transition: background 0.15s;
+    }
+    .booking-item:last-child { border-bottom: none; }
+    .booking-item:hover { background: rgba(255,255,255,0.02); }
+    .booking-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #0a0a0f;
+    }
+    .booking-info { flex: 1; min-width: 0; }
+    .booking-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .booking-meta { font-size: 11px; color: var(--muted); }
+    .booking-price { font-family: var(--font-head); font-size: 14px; font-weight: 700; }
+
+    .b-status {
+      font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 500;
+    }
+    .b-status.confirmed { color: var(--accent3); background: rgba(77,255,180,0.1); border: 1px solid rgba(77,255,180,0.2); }
+    .b-status.cancelled { color: var(--accent2); background: rgba(255,77,109,0.1); border: 1px solid rgba(255,77,109,0.2); }
+    .b-status.pending   { color: var(--accent); background: rgba(232,255,71,0.1); border: 1px solid rgba(232,255,71,0.2); }
+
+    /* ─── ACTIVITY PANEL ─── */
+    .activity-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius);
+      animation: fadeUp 0.4s ease 0.35s both;
+    }
+    .activity-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .activity-item {
+      padding: 12px 20px; display: flex; align-items: flex-start; gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+    }
+    .activity-text { font-size: 12px; line-height: 1.5; }
+    .activity-text strong { color: var(--text); font-weight: 500; }
+    .activity-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ─── MODAL ─── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; width: 480px; max-width: 95vw;
+      padding: 28px; animation: scaleIn 0.2s ease;
+    }
+    .modal-title {
+      font-family: var(--font-head); font-size: 18px; font-weight: 800;
+      margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .close-btn {
+      width: 28px; height: 28px; border-radius: 6px; display: flex;
+      align-items: center; justify-content: center; cursor: pointer;
+      background: var(--card); border: 1px solid var(--border); color: var(--muted);
+      font-size: 16px; transition: all 0.15s;
+    }
+    .close-btn:hover { color: var(--text); }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: block; }
+    .form-input, .form-select {
+      width: 100%; background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; color: var(--text);
+      font-family: var(--font-mono); font-size: 13px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--muted); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-actions { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+
+    /* ─── EMPTY STATE ─── */
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: var(--muted);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-text { font-size: 13px; }
+
+    /* ─── ANIMATIONS ─── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 1100px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { padding: 20px; }
+    }
+
+    /* toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--accent);
+      color: var(--accent); padding: 12px 18px; border-radius: 8px;
+      font-size: 12px; display: none; z-index: 200;
+      animation: fadeUp 0.3s ease;
+    }
+    .toast.show { display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">Event<span>Hub</span></div>
+      <div class="logo-sub">Management Console</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section-label">Overview</div>
+      <div class="nav-item active" onclick="switchTab('events')">
+        <span class="nav-icon">◈</span> Events
+      </div>
+      <div class="nav-item" onclick="switchTab('bookings')">
+        <span class="nav-icon">◻</span> Bookings
+        <span class="nav-badge" id="booking-badge">6</span>
+      </div>
+      <div class="nav-section-label">System</div>
+      <div class="nav-item">
+        <span class="nav-icon">◉</span> Analytics
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">◎</span> Settings
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="avatar">A</div>
+        <div>
+          <div class="user-name">Admin</div>
+          <div class="user-role">Super User</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="page-title">Events <span>List</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-outline" onclick="location.reload()">↺ Refresh</button>
+        <button class="btn btn-primary" id="add-btn" onclick="openModal()">＋ Add Event</button>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-row">
+      <div class="stat-card c1">
+        <div class="stat-label">Total Events</div>
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-delta"><span class="up">↑ 3</span> this month</div>
+      </div>
+      <div class="stat-card c2">
+        <div class="stat-label">Total Bookings</div>
+        <div class="stat-value" id="stat-bookings">0</div>
+        <div class="stat-delta"><span class="up">↑ 12</span> this week</div>
+      </div>
+      <div class="stat-card c3">
+        <div class="stat-label">Seats Filled</div>
+        <div class="stat-value" id="stat-seats">0</div>
+        <div class="stat-delta"><span class="up">↑ 8%</span> vs last week</div>
+      </div>
+      <div class="stat-card c4">
+        <div class="stat-label">Revenue</div>
+        <div class="stat-value" id="stat-rev">$0</div>
+        <div class="stat-delta"><span class="up">↑ $1.2k</span> this month</div>
+      </div>
+    </div>
+
+    <!-- ─── EVENTS SECTION ─── -->
+    <div id="tab-events">
+      <div class="section-header">
+        <div class="section-title">Upcoming Events</div>
+        <div class="section-controls">
+          <div class="search-box">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="search-input" placeholder="Search events..." oninput="filterEvents()"/>
+          </div>
+          <select class="filter-select" id="cat-filter" onchange="filterEvents()">
+            <option value="">All Categories</option>
+            <option value="music">Music</option>
+            <option value="tech">Tech</option>
+            <option value="food">Food</option>
+            <option value="sports">Sports</option>
+            <option value="art">Art</option>
+            <option value="business">Business</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Category</th>
+              <th>Date</th>
+              <th>Seats</th>
+              <th>Price</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="events-table-body">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <div class="empty-icon">◈</div>
+                  <div class="empty-text">No events found. Add your first event!</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── BOOKINGS SECTION ─── -->
+    <div id="tab-bookings" style="display:none">
+      <div class="two-col">
+        <!-- Recent Bookings -->
+        <div class="booking-list">
+          <div class="booking-list-header">
+            <div class="section-title">Recent Bookings</div>
+            <select class="filter-select" style="width:auto" id="booking-status-filter" onchange="filterBookings()">
+              <option value="">All</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          <div id="bookings-list-body"></div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="activity-panel">
+          <div class="activity-header">
+            <div class="section-title">Activity Feed</div>
+            <span style="font-size:11px;color:var(--muted)">Live</span>
+          </div>
+          <div id="activity-feed"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ADD EVENT MODAL -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <div class="modal-title">
+      New Event <span class="close-btn" onclick="closeModal()">✕</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Event Title *</label>
+      <input class="form-input" id="f-title" placeholder="e.g. Jazz Night at The Venue"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Category *</label>
+        <input class="form-input" id="f-cat" placeholder="e.g. Music, Concert, Ballet"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Price ($) *</label>
+        <input class="form-input" id="f-price" type="number" placeholder="0.00"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start Date *</label>
+        <input class="form-input" id="f-start" type="date"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Date</label>
+        <input class="form-input" id="f-end" type="date"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Location *</label>
+        <input class="form-input" id="f-loc" placeholder="City, Venue"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Capacity</label>
+        <input class="form-input" id="f-cap" type="number" placeholder="100"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Image URL</label>
+      <input class="form-input" id="f-img" placeholder="https://images.unsplash.com/..."/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="f-desc" placeholder="Short description of the event"/>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addEvent()">Create Event</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">✓ <span id="toast-msg"></span></div>
+
+<script>
+  // ─── CONFIG ───
+  const API_BASE = 'http://localhost:5000/api';
+
+  // ─── STATE ───
+  let events = [];
+
+  let bookings = [
+    { id:'b1', bookingId:'BKG-MAR2026-A4X', name:'Sarah Chen', email:'sarah@example.com', event:'Synth & Soul Festival', seats:2, total:98, status:'confirmed', time:'2 min ago' },
+    { id:'b2', bookingId:'BKG-MAR2026-B9K', name:'James Miller', email:'james@example.com', event:'DevConf Spring 2026', seats:1, total:129, status:'confirmed', time:'15 min ago' },
+    { id:'b3', bookingId:'BKG-MAR2026-C3M', name:'Priya Sharma', email:'priya@example.com', event:'City Marathon 2026', seats:3, total:180, status:'pending', time:'1 hr ago' },
+    { id:'b4', bookingId:'BKG-MAR2026-D7R', name:'Tom Wilson', email:'tom@example.com', event:'Street Food Carnival', seats:4, total:60, status:'cancelled', time:'3 hrs ago' },
+    { id:'b5', bookingId:'BKG-MAR2026-E2P', name:'Aiko Tanaka', email:'aiko@example.com', event:'Startup Summit 2026', seats:1, total:299, status:'confirmed', time:'5 hrs ago' },
+    { id:'b6', bookingId:'BKG-MAR2026-F5Q', name:'Carlos Ruiz', email:'carlos@example.com', event:'Modern Art Biennale', seats:2, total:70, status:'confirmed', time:'Yesterday' },
+  ];
+
+  const avatarColors = ['#e8ff47','#4dffb4','#a78bfa','#fb923c','#60a5fa','#ff4d6d'];
+
+  // ─── STATS ───
+  function updateStats() {
+    const totalSeats = events.reduce((a, e) => a + e.bookedSeats, 0);
+    const totalRev = bookings.filter(b => b.status === 'confirmed').reduce((a, b) => a + b.total, 0);
+    document.getElementById('stat-total').textContent = events.length;
+    document.getElementById('stat-bookings').textContent = bookings.length;
+    document.getElementById('stat-seats').textContent = totalSeats.toLocaleString();
+    document.getElementById('stat-rev').textContent = '$' + totalRev.toLocaleString();
+    document.getElementById('booking-badge').textContent = bookings.filter(b => b.status === 'confirmed').length;
+  }
+
+  // ─── EVENTS TABLE ───
+  function getStatus(e) {
+    const pct = e.bookedSeats / e.capacity;
+    if (pct >= 0.99) return ['sold-out', 'Sold Out'];
+    const now = new Date(); const start = new Date(e.startDate);
+    if (start > now) return ['upcoming', 'Upcoming'];
+    return ['active', 'Active'];
+  }
+
+  function getBarClass(pct) {
+    if (pct < 0.5) return 'low';
+    if (pct < 0.85) return 'mid';
+    return 'high';
+  }
+
+  // Dynamic category tag color — works for any category string from DB
+  function getCatStyle(cat) {
+    const map = {
+      music:    'color:#a78bfa;border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.08)',
+      jazz:     'color:#a78bfa;border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.08)',
+      concert:  'color:var(--accent3);border-color:rgba(77,255,180,0.3);background:rgba(77,255,180,0.08)',
+      food:     'color:#fb923c;border-color:rgba(251,146,60,0.3);background:rgba(251,146,60,0.08)',
+      sports:   'color:var(--accent2);border-color:rgba(255,77,109,0.3);background:rgba(255,77,109,0.08)',
+      art:      'color:#60a5fa;border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.08)',
+      business: 'color:var(--accent);border-color:rgba(232,255,71,0.3);background:rgba(232,255,71,0.08)',
+      tech:     'color:var(--accent3);border-color:rgba(77,255,180,0.3);background:rgba(77,255,180,0.08)',
+      ballet:   'color:#f9a8d4;border-color:rgba(249,168,212,0.3);background:rgba(249,168,212,0.08)',
+      comedy:   'color:#fde68a;border-color:rgba(253,230,138,0.3);background:rgba(253,230,138,0.08)',
+      theater:  'color:#fb923c;border-color:rgba(251,146,60,0.3);background:rgba(251,146,60,0.08)',
+    };
+    return map[cat.toLowerCase()] || 'color:var(--muted);border-color:var(--border);background:var(--tag-bg)';
+  }
+
+  function renderEvents(list) {
+    const tbody = document.getElementById('events-table-body');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">◈</div><div class="empty-text">No events match your search.</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(e => {
+      const pct = e.bookedSeats / e.capacity;
+      const [sc, sl] = getStatus(e);
+      const bc = getBarClass(pct);
+      const d = new Date(e.startDate).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      const eId = e._id || e.id;
+      // Use real image if available, else fallback placeholder
+      const imgHtml = e.image
+        ? `<img src="${e.image}" class="event-thumb" style="object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="event-thumb" style="display:none">📅</div>`
+        : `<div class="event-thumb">📅</div>`;
+      return `
+      <tr>
+        <td>
+          <div class="event-info">
+            ${imgHtml}
+            <div>
+              <div class="event-name">${e.title}</div>
+              <div class="event-loc">📍 ${e.location}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="tag" style="${getCatStyle(e.category)}">${e.category}</span></td>
+        <td style="font-size:12px;color:var(--muted)">${d}</td>
+        <td>
+          <div class="seats-bar">
+            <div class="seats-text">${e.bookedSeats} / ${e.capacity}</div>
+            <div class="bar-track"><div class="bar-fill ${bc}" style="width:${Math.round(pct*100)}%"></div></div>
+          </div>
+        </td>
+        <td><div class="price-cell">$${e.price}</div></td>
+        <td><span class="status-dot ${sc}">${sl}</span></td>
+        <td>
+          <div class="actions">
+            <div class="icon-btn" title="View" onclick="viewEvent('${eId}')">◉</div>
+            <div class="icon-btn del" title="Delete" onclick="deleteEvent('${eId}')">✕</div>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  let filteredEvents = [];
+  function filterEvents() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const cat = document.getElementById('cat-filter').value;
+    filteredEvents = events.filter(e => {
+      const matchQ = !q || e.title.toLowerCase().includes(q) || e.location.toLowerCase().includes(q);
+      const matchC = !cat || e.category.toLowerCase() === cat.toLowerCase();
+      return matchQ && matchC;
+    });
+    renderEvents(filteredEvents);
+  }
+
+  // ─── GET EVENTS FROM API ───
+  async function fetchEvents() {
+    const tbody = document.getElementById('events-table-body');
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon" style="animation:spin 1s linear infinite;display:inline-block">◈</div><div class="empty-text" style="margin-top:8px">Loading events...</div></div></td></tr>`;
+
+    try {
+      const res = await fetch(`${API_BASE}/events`);
+      const json = await res.json();
+      if (json.success) {
+        events = json.data;
+        filterEvents();
+        updateStats();
+        buildCategoryFilter();
+      } else {
+        showToast('Failed to load events', true);
+      }
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">⚠</div><div class="empty-text">Could not reach server. Check your API is running.</div></div></td></tr>`;
+    }
+  }
+
+  // Build category dropdown dynamically from real DB categories
+  function buildCategoryFilter() {
+    const cats = [...new Set(events.map(e => e.category))].sort();
+    const sel = document.getElementById('cat-filter');
+    sel.innerHTML = '<option value="">All Categories</option>' +
+      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  function viewEvent(id) {
+    const e = events.find(ev => (ev._id || ev.id) === id);
+    if (!e) return;
+    showToast(`📅 ${e.title} — $${e.price} · ${e.bookedSeats}/${e.capacity} seats`);
+  }
+
+  // DELETE — UI only (wire to DELETE /api/events/:id when ready)
+  function deleteEvent(id) {
+    events = events.filter(e => (e._id || e.id) !== id);
+    filterEvents();
+    updateStats();
+    showToast('Event removed');
+  }
+
+  // ─── POST CREATE EVENT ───
+  async function addEvent() {
+    const title = document.getElementById('f-title').value.trim();
+    const cat   = document.getElementById('f-cat').value.trim();
+    const price = parseFloat(document.getElementById('f-price').value) || 0;
+    const start = document.getElementById('f-start').value;
+    const end   = document.getElementById('f-end').value;
+    const loc   = document.getElementById('f-loc').value.trim();
+    const cap   = parseInt(document.getElementById('f-cap').value) || 100;
+    const img   = document.getElementById('f-img').value.trim();
+    const desc  = document.getElementById('f-desc').value.trim();
+
+    if (!title || !start || !loc || !cat) {
+      showToast('Please fill in all required fields', true); return;
+    }
+
+    const btn = document.querySelector('#event-modal .btn-primary');
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title, category: cat, price,
+          startDate: start, endDate: end || start,
+          location: loc, capacity: cap,
+          image: img || undefined,
+          description: desc || undefined
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        events.unshift(json.data);
+        filterEvents();
+        updateStats();
+        buildCategoryFilter();
+        closeModal();
+        showToast('✓ Event created successfully!');
+        ['f-title','f-price','f-start','f-end','f-loc','f-cap','f-img','f-desc'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+      } else {
+        showToast(json.message || 'Failed to create event', true);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Server error — check your API', true);
+    } finally {
+      btn.textContent = 'Create Event';
+      btn.disabled = false;
+    }
+  }
+
+  // ─── BOOKINGS ───
+  function renderBookings(list) {
+    const body = document.getElementById('bookings-list-body');
+    if (!list.length) {
+      body.innerHTML = `<div class="empty-state"><div class="empty-icon">◻</div><div class="empty-text">No bookings found.</div></div>`;
+      return;
+    }
+    body.innerHTML = list.map((b, i) => `
+      <div class="booking-item">
+        <div class="booking-avatar" style="background:${avatarColors[i % avatarColors.length]}">${b.name.charAt(0)}</div>
+        <div class="booking-info">
+          <div class="booking-name">${b.name}</div>
+          <div class="booking-meta">${b.event} · ${b.seats} seat${b.seats>1?'s':''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="booking-price" style="color:var(--accent3)">$${b.total}</div>
+          <span class="b-status ${b.status}">${b.status}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function filterBookings() {
+    const s = document.getElementById('booking-status-filter').value;
+    const filtered = s ? bookings.filter(b => b.status === s) : bookings;
+    renderBookings(filtered);
+  }
+
+  function renderActivity() {
+    const msgs = [
+      { color: 'var(--accent3)', text: '<strong>Sarah Chen</strong> booked 2 seats for Synth & Soul Festival', time: '2 min ago' },
+      { color: 'var(--accent3)', text: '<strong>James Miller</strong> booked 1 seat for DevConf Spring 2026', time: '15 min ago' },
+      { color: 'var(--accent)', text: '<strong>New event</strong> "City Marathon 2026" was published', time: '45 min ago' },
+      { color: 'var(--accent2)', text: '<strong>Tom Wilson</strong> cancelled booking BKG-MAR2026-D7R', time: '3 hrs ago' },
+      { color: '#a78bfa', text: '<strong>Startup Summit 2026</strong> is 95% sold out', time: '5 hrs ago' },
+      { color: 'var(--accent3)', text: '<strong>Aiko Tanaka</strong> booked 1 seat for Startup Summit 2026', time: '5 hrs ago' },
+    ];
+    document.getElementById('activity-feed').innerHTML = msgs.map(m => `
+      <div class="activity-item">
+        <div class="activity-dot" style="background:${m.color}"></div>
+        <div>
+          <div class="activity-text">${m.text}</div>
+          <div class="activity-time">${m.time}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ─── MODAL ───
+  function openModal() {
+    document.getElementById('event-modal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('event-modal').classList.remove('open');
+  }
+  document.getElementById('event-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  function addEvent() {
+    const title = document.getElementById('f-title').value.trim();
+    const cat   = document.getElementById('f-cat').value;
+    const price = parseFloat(document.getElementById('f-price').value) || 0;
+    const start = document.getElementById('f-start').value;
+    const end   = document.getElementById('f-end').value;
+    const loc   = document.getElementById('f-loc').value.trim();
+    const cap   = parseInt(document.getElementById('f-cap').value) || 100;
+
+    if (!title || !start || !loc) {
+      showToast('Please fill in required fields', true); return;
+    }
+    const newEvent = {
+      id: 'e' + Date.now(), title, category: cat, price, startDate: start,
+      endDate: end || start, location: loc, capacity: cap, bookedSeats: 0
+    };
+    events.unshift(newEvent);
+    filterEvents();
+    updateStats();
+    closeModal();
+    showToast('Event created successfully!');
+    // Clear form
+    ['f-title','f-price','f-start','f-end','f-loc','f-cap'].forEach(id => document.getElementById(id).value = '');
+  }
+
+  // ─── TABS ───
+  function switchTab(tab) {
+    document.getElementById('tab-events').style.display   = tab === 'events'   ? '' : 'none';
+    document.getElementById('tab-bookings').style.display = tab === 'bookings' ? '' : 'none';
+    document.getElementById('add-btn').style.display      = tab === 'events'   ? '' : 'none';
+    document.getElementById('page-title').innerHTML = tab === 'events'
+      ? 'Events <span>List</span>'
+      : 'Bookings <span>Overview</span>';
+    document.querySelectorAll('.nav-item').forEach((el, i) => {
+      el.classList.toggle('active', (tab === 'events' && i === 0) || (tab === 'bookings' && i === 1));
+    });
+  }
+
+  // ─── TOAST ───
+  function showToast(msg, isErr = false) {
+    const t = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    t.style.borderColor = isErr ? 'var(--accent2)' : 'var(--accent)';
+    t.style.color       = isErr ? 'var(--accent2)' : 'var(--accent)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // ─── INIT ───
+  fetchEvents();
+  renderBookings(bookings);
+  renderActivity();
+</script>
+</body>
+</html>
