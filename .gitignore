@@ -5,3 +5,4 @@ node_modules/
 
 backend/routes/childSafety.js
 eventlistdashboard.html
+hikvision_dashboard.html
