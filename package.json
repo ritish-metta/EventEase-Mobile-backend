@@ -22,7 +22,8 @@
     "mongoose": "^8.20.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.9",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

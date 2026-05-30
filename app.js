@@ -9,6 +9,7 @@ const bookingsRouter = require('./routes/bookings');
 const childSafetyRoutes = require('./routes/childSafety');
 const yogaRoutes = require('./routes/yoga');
 const pmjSmsRoutes = require('./routes/pmj_sms_route');
+const hikvisionRoutes = require('./routes/hikvision_alarm');
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +51,7 @@ app.use('/api/pmj-sms', pmjSmsRoutes);
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'child-safety-dashboard.html'));
 });
+app.use('/api/hikvision', express.raw({ type: '*/*', limit: '10mb' }), hikvisionRoutes);
 
 app.get('/api', (req, res) => {
   res.json({
