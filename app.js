@@ -10,6 +10,8 @@ const childSafetyRoutes = require('./routes/childSafety');
 const yogaRoutes = require('./routes/yoga');
 const pmjSmsRoutes = require('./routes/pmj_sms_route');
 const hikvisionRoutes = require('./routes/hikvision_alarm');
+const twilioSmsRoutes = require('./routes/twilio_sms'); // ✅ NEW
+const { createTcpServer } = require('./tcp_alarm_server');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +19,20 @@ const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 const io = initializeWebSocket(server);
+
+// ✅ Raw body for hikvision must come BEFORE express.json()
+app.use('/api/hikvision', (req, res, next) => {
+  let data = '';
+  req.on('data', chunk => { data += chunk; });
+  req.on('end', () => {
+    req.rawBody = data;
+    next();
+  });
+});
+
+// ✅ Raw body for Twilio webhook — must come BEFORE express.json()
+// Twilio sends application/x-www-form-urlencoded
+app.use('/api/twilio/sms', express.urlencoded({ extended: false }));
 
 app.use(express.json());
 
@@ -28,18 +44,12 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
-
-
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-
-
-app.use(express.static('public')); 
+app.use(express.static('public'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
@@ -47,11 +57,18 @@ app.use('/api/bookings', bookingsRouter);
 app.use('/api/child-safety', childSafetyRoutes);
 app.use('/api/yoga', yogaRoutes);
 app.use('/api/pmj-sms', pmjSmsRoutes);
+app.use('/api/twilio', twilioSmsRoutes); // ✅ NEW
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'child-safety-dashboard.html'));
 });
-app.use('/api/hikvision', express.raw({ type: '*/*', limit: '10mb' }), hikvisionRoutes);
+
+// ✅ Serve SMS Alert Dashboard
+app.get('/sms-alerts', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'sms-alerts-dashboard.html'));
+});
+
+app.use('/api/hikvision', hikvisionRoutes);
 
 app.get('/api', (req, res) => {
   res.json({
@@ -60,6 +77,14 @@ app.get('/api', (req, res) => {
     websocket: 'Active',
     endpoints: {
       dashboard: 'GET / (Child Safety Dashboard)',
+      smsDashboard: 'GET /sms-alerts (SMS Alerts Dashboard)', // ✅ NEW
+      twilio: { // ✅ NEW
+        webhook:      'POST /api/twilio/sms      ← Twilio calls this (set in Twilio Console)',
+        getAlerts:    'GET  /api/twilio/alerts   ← Fetch all SMS alerts',
+        markRead:     'PUT  /api/twilio/alerts/:id/read',
+        clearAlerts:  'DELETE /api/twilio/alerts',
+        forwardSms:   'POST /api/twilio/forward  ← Forward alert to a number',
+      },
       public: {
         register: 'POST /api/auth/register',
         sendOtp: 'POST /api/auth/send-otp',
@@ -95,6 +120,7 @@ app.get('/api', (req, res) => {
           'batteryUpdate - Real-time battery updates',
           'deviceConnected - Device connection notification',
           'deviceDisconnected - Device connection notification',
+          'sms_alert - Real-time SMS alert from ESIM364 via Twilio', // ✅ NEW
         ],
       },
     },
@@ -123,7 +149,11 @@ const startServer = async () => {
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`API info available at http://localhost:${PORT}/api`);
+    console.log(`SMS Dashboard: http://localhost:${PORT}/sms-alerts`); // ✅ NEW
+    console.log(`Twilio Webhook URL: https://YOUR_NGROK_OR_DOMAIN/api/twilio/sms`); // ✅ NEW
   });
+
+  createTcpServer(io);
 };
 
 startServer();
