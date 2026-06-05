@@ -89,11 +89,8 @@ const parseAlarmXml = async (bodyStr) => {
 // POST /api/hikvision/event — panel pushes alerts here
 router.post('/event', async (req, res) => {
   try {
-    const rawBody = await new Promise((resolve) => {
-      let data = '';
-      req.on('data', (chunk) => (data += chunk));
-      req.on('end', () => resolve(data));
-    });
+
+   const rawBody = req.rawBody || '';
 
     console.log('\n========================================');
     console.log('✅ Hikvision Event Received!');
