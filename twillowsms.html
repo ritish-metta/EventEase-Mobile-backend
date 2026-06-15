@@ -3,729 +3,340 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ESIM364 — SMS Alert Monitor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <script src="/socket.io/socket.io.js"></script>
+  <title>SMS Alert Monitor</title>
   <style>
-    :root {
-      --bg:        #050a0e;
-      --panel:     #0a1520;
-      --border:    #1a3a5c;
-      --accent:    #00d4ff;
-      --accent2:   #ff4b00;
-      --green:     #00ff88;
-      --yellow:    #ffd000;
-      --text:      #cde8f5;
-      --muted:     #4a7a9b;
-      --mono:      'Share Tech Mono', monospace;
-      --sans:      'Rajdhani', sans-serif;
-    }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
+      background: #0f0404;
+      color: #f0d0d0;
+      font-family: 'Segoe UI', sans-serif;
       min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Scanline overlay */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,212,255,0.015) 2px,
-        rgba(0,212,255,0.015) 4px
-      );
-      pointer-events: none;
-      z-index: 999;
     }
 
     header {
+      background: #1a0505;
+      border-bottom: 1px solid #5a1010;
+      padding: 16px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 18px 32px;
-      border-bottom: 1px solid var(--border);
-      background: var(--panel);
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 10;
     }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #ff4444;
+      letter-spacing: 1px;
     }
 
-    .logo-icon {
-      width: 40px; height: 40px;
-      border: 2px solid var(--accent);
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      font-size: 18px;
-      color: var(--accent);
-      box-shadow: 0 0 12px rgba(0,212,255,0.3);
-      animation: pulse-border 2s ease-in-out infinite;
+    header p {
+      font-size: 11px;
+      color: #7a3333;
+      margin-top: 2px;
     }
 
-    @keyframes pulse-border {
-      0%, 100% { box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-      50%       { box-shadow: 0 0 20px rgba(0,212,255,0.7); }
-    }
-
-    .logo h1 {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--accent);
-    }
-
-    .logo p {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 2px;
-    }
-
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .status-dot {
+    .status {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-family: var(--mono);
-      font-size: 12px;
+      font-size: 13px;
+      color: #cc4444;
     }
 
     .dot {
-      width: 8px; height: 8px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 8px var(--green);
-      animation: blink 1.5s ease-in-out infinite;
+      background: #ff4444;
+      animation: blink 1.4s infinite;
     }
 
-    .dot.offline { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: none; }
+    .dot.off { background: #555; animation: none; }
 
     @keyframes blink {
       0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
+      50% { opacity: 0.2; }
     }
 
-    #clock {
-      font-family: var(--mono);
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    /* Stats row */
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      padding: 24px 32px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 24px 28px 0;
     }
 
-    .stat-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
+    .stat {
+      background: #1a0505;
+      border: 1px solid #3a0a0a;
+      border-radius: 10px;
+      padding: 18px 20px;
     }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: var(--accent);
-    }
-
-    .stat-card.danger::before { background: var(--accent2); }
-    .stat-card.warn::before   { background: var(--yellow); }
-    .stat-card.good::before   { background: var(--green); }
 
     .stat-label {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 2px;
+      font-size: 11px;
+      color: #7a3333;
       text-transform: uppercase;
-      margin-bottom: 10px;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
     }
 
     .stat-value {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 700;
-      color: var(--accent);
-      line-height: 1;
+      color: #ff4444;
     }
 
-    .stat-card.danger .stat-value { color: var(--accent2); }
-    .stat-card.warn .stat-value   { color: var(--yellow); }
-    .stat-card.good .stat-value   { color: var(--green); }
+    .stat-value.muted { color: #cc8888; }
+    .stat-value.good  { color: #ff6666; }
 
-    /* Main layout */
-    .main {
-      display: grid;
-      grid-template-columns: 1fr 320px;
-      gap: 16px;
-      padding: 0 32px 32px;
-    }
-
-    /* Alert list */
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .panel-header {
+    .toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
+      padding: 20px 28px 12px;
     }
 
-    .panel-title {
+    .toolbar span {
       font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--accent);
+      color: #7a3333;
     }
 
     .btn {
       background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 14px;
-      border-radius: 4px;
-      font-family: var(--mono);
-      font-size: 11px;
+      border: 1px solid #5a1010;
+      color: #cc4444;
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-size: 12px;
       cursor: pointer;
       transition: all 0.2s;
-      letter-spacing: 1px;
+      margin-left: 8px;
     }
 
     .btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      box-shadow: 0 0 8px rgba(0,212,255,0.2);
+      background: #2a0808;
+      border-color: #ff4444;
+      color: #ff4444;
     }
 
-    .btn.danger:hover {
-      border-color: var(--accent2);
-      color: var(--accent2);
-      box-shadow: 0 0 8px rgba(255,75,0,0.2);
+    .list {
+      padding: 0 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    #alertList {
-      max-height: calc(100vh - 320px);
-      overflow-y: auto;
-    }
-
-    #alertList::-webkit-scrollbar { width: 4px; }
-    #alertList::-webkit-scrollbar-track { background: var(--bg); }
-    #alertList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-    .alert-item {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 16px;
-      align-items: start;
-      padding: 16px 20px;
-      border-bottom: 1px solid rgba(26,58,92,0.5);
+    .card {
+      background: #1a0505;
+      border: 1px solid #3a0a0a;
+      border-radius: 10px;
+      padding: 14px 18px;
       cursor: pointer;
-      transition: background 0.2s;
-      animation: slideIn 0.3s ease-out;
-    }
-
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-
-    .alert-item:hover { background: rgba(0,212,255,0.04); }
-    .alert-item.unread { border-left: 3px solid var(--accent2); }
-    .alert-item.unread { background: rgba(255,75,0,0.04); }
-
-    .alert-icon {
-      width: 36px; height: 36px;
-      border-radius: 6px;
-      display: grid;
-      place-items: center;
-      font-size: 16px;
-      background: rgba(255,75,0,0.15);
-      border: 1px solid rgba(255,75,0,0.3);
-      flex-shrink: 0;
-    }
-
-    .alert-body {}
-
-    .alert-from {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }
-
-    .alert-message {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 4px;
-      line-height: 1.4;
-    }
-
-    .alert-time {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    .alert-badge {
-      font-family: var(--mono);
-      font-size: 9px;
-      padding: 3px 8px;
-      border-radius: 3px;
-      background: rgba(255,75,0,0.2);
-      color: var(--accent2);
-      border: 1px solid rgba(255,75,0,0.3);
-      white-space: nowrap;
-      align-self: center;
-    }
-
-    .alert-badge.read {
-      background: rgba(74,122,155,0.15);
-      color: var(--muted);
-      border-color: var(--border);
-    }
-
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-      color: var(--muted);
-    }
-
-    .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
-    .empty-state p { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; }
-
-    /* Side panel */
-    .side { display: flex; flex-direction: column; gap: 16px; }
-
-    /* Live feed */
-    .live-feed {
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 16px;
-      max-height: 200px;
-      overflow-y: auto;
-      color: var(--green);
-      line-height: 2;
-    }
-
-    .live-feed::-webkit-scrollbar { width: 3px; }
-    .live-feed::-webkit-scrollbar-thumb { background: var(--border); }
-
-    .log-line { opacity: 0.8; }
-    .log-line.new { color: var(--accent2); animation: fadeLog 3s ease forwards; }
-
-    @keyframes fadeLog {
-      0%   { color: var(--accent2); opacity: 1; }
-      100% { color: var(--green);   opacity: 0.8; }
-    }
-
-    /* Forward form */
-    .forward-form { padding: 16px; }
-
-    .form-group { margin-bottom: 12px; }
-
-    .form-label {
-      display: block;
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 2px;
-      margin-bottom: 6px;
-    }
-
-    .form-input {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-family: var(--mono);
-      font-size: 12px;
-      outline: none;
       transition: border-color 0.2s;
     }
 
-    .form-input:focus { border-color: var(--accent); }
-
-    .btn-full {
-      width: 100%;
-      padding: 10px;
-      background: rgba(0,212,255,0.1);
-      border: 1px solid var(--accent);
-      color: var(--accent);
-      border-radius: 4px;
-      font-family: var(--mono);
-      font-size: 12px;
-      cursor: pointer;
-      letter-spacing: 2px;
-      transition: all 0.2s;
+    .card.unread {
+      border-left: 3px solid #ff4444;
+      border-radius: 0 10px 10px 0;
     }
 
-    .btn-full:hover {
-      background: rgba(0,212,255,0.2);
-      box-shadow: 0 0 16px rgba(0,212,255,0.3);
+    .card:hover { border-color: #7a2020; }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
 
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--panel);
-      border: 1px solid var(--green);
-      color: var(--green);
-      padding: 12px 20px;
-      border-radius: 6px;
-      font-family: var(--mono);
-      font-size: 12px;
-      box-shadow: 0 0 20px rgba(0,255,136,0.3);
-      transform: translateY(80px);
-      opacity: 0;
-      transition: all 0.3s;
-      z-index: 1000;
+    .card-from {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ff6666;
     }
 
-    .toast.show { transform: translateY(0); opacity: 1; }
-    .toast.error { border-color: var(--accent2); color: var(--accent2); box-shadow: 0 0 20px rgba(255,75,0,0.3); }
-
-    /* Flash new alert */
-    .flash {
-      position: fixed;
-      inset: 0;
-      background: rgba(255,75,0,0.05);
-      pointer-events: none;
-      z-index: 998;
-      opacity: 0;
-      animation: flashAnim 0.6s ease-out;
+    .card-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
-    @keyframes flashAnim {
-      0%   { opacity: 1; }
-      100% { opacity: 0; }
+    .badge {
+      font-size: 10px;
+      padding: 2px 9px;
+      border-radius: 99px;
+      background: #3a0a0a;
+      color: #ff4444;
+      font-weight: 600;
+      border: 1px solid #5a1010;
     }
 
-    @media (max-width: 900px) {
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .main  { grid-template-columns: 1fr; }
+    .badge.read {
+      background: #140404;
+      color: #5a3333;
+      border-color: #2a1010;
+    }
+
+    .card-time {
+      font-size: 11px;
+      color: #5a3333;
+      font-family: monospace;
+    }
+
+    .card-msg {
+      font-size: 15px;
+      color: #e0c0c0;
+      line-height: 1.5;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: #5a2020;
+    }
+
+    .empty .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty p { font-size: 13px; }
+
+    .err-bar {
+      margin: 12px 28px 0;
+      background: #2a0808;
+      border: 1px solid #7a1010;
+      color: #ff6666;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stats { padding: 16px 16px 0; }
+      .toolbar, .list { padding-left: 16px; padding-right: 16px; }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">
-    <div class="logo-icon">📡</div>
-    <div>
-      <h1>SMS Alert Monitor</h1>
-      <p>ESIM364 · TWILIO GATEWAY · REAL-TIME</p>
-    </div>
+  <div>
+    <h1>📲 SMS Alert Monitor</h1>
+    <p>ESIM364 · TWILIO GATEWAY</p>
   </div>
-  <div class="status-bar">
-    <div class="status-dot">
-      <div class="dot" id="wsDot"></div>
-      <span id="wsStatus">CONNECTING</span>
-    </div>
-    <div id="clock">--:--:--</div>
+  <div class="status">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Connecting...</span>
   </div>
 </header>
 
 <div class="stats">
-  <div class="stat-card">
-    <div class="stat-label">Total Alerts</div>
-    <div class="stat-value" id="statTotal">0</div>
+  <div class="stat">
+    <div class="stat-label">Total</div>
+    <div class="stat-value" id="sTotal">—</div>
   </div>
-  <div class="stat-card danger">
+  <div class="stat">
     <div class="stat-label">Unread</div>
-    <div class="stat-value" id="statUnread">0</div>
+    <div class="stat-value muted" id="sUnread">—</div>
   </div>
-  <div class="stat-card good">
+  <div class="stat">
     <div class="stat-label">Read</div>
-    <div class="stat-value" id="statRead">0</div>
-  </div>
-  <div class="stat-card warn">
-    <div class="stat-label">Last Alert</div>
-    <div class="stat-value" id="statLast" style="font-size:16px;padding-top:10px">—</div>
+    <div class="stat-value good" id="sRead">—</div>
   </div>
 </div>
 
-<div class="main">
-  <!-- Alert List -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">⚡ Incoming Alerts</span>
-      <div style="display:flex;gap:8px">
-        <button class="btn" onclick="loadAlerts()">↻ Refresh</button>
-        <button class="btn danger" onclick="clearAlerts()">✕ Clear All</button>
-      </div>
-    </div>
-    <div id="alertList">
-      <div class="empty-state">
-        <div class="icon">📭</div>
-        <p>Waiting for alerts from ESIM364...</p>
-      </div>
-    </div>
-  </div>
+<div id="errBar" class="err-bar"></div>
 
-  <!-- Side Panel -->
-  <div class="side">
-    <!-- Live Log -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">📟 Live Log</span>
-      </div>
-      <div class="live-feed" id="liveLog">
-        <div class="log-line">> System initialized</div>
-        <div class="log-line">> Waiting for webhook...</div>
-      </div>
-    </div>
-
-    <!-- Forward SMS -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">📤 Forward Alert</span>
-      </div>
-      <div class="forward-form">
-        <div class="form-group">
-          <label class="form-label">To Number (+91XXXXXXXXXX)</label>
-          <input class="form-input" id="fwdTo" type="text" placeholder="+919XXXXXXXXX"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Message</label>
-          <textarea class="form-input" id="fwdMsg" rows="3" placeholder="Alert message..."></textarea>
-        </div>
-        <button class="btn-full" onclick="forwardSms()">SEND ALERT →</button>
-      </div>
-    </div>
-
-    <!-- Twilio Config Info -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">⚙ Webhook Info</span>
-      </div>
-      <div style="padding:16px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:2">
-        <div style="color:var(--accent);margin-bottom:8px">Set in Twilio Console:</div>
-        <div>Messaging Webhook:</div>
-        <div style="color:var(--text);word-break:break-all" id="webhookUrl">https://YOUR_DOMAIN/api/twilio/sms</div>
-        <div style="margin-top:12px;color:var(--accent)">ESIM364 Panel Number:</div>
-        <div style="color:var(--text)">+19016400054</div>
-      </div>
-    </div>
+<div class="toolbar">
+  <span id="lastRefresh">—</span>
+  <div>
+    <button class="btn" onclick="load()">↻ Refresh</button>
+    <button class="btn" onclick="clearAll()">✕ Clear All</button>
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
+<div class="list" id="list">
+  <div class="empty">
+    <div class="icon">📭</div>
+    <p>Loading alerts...</p>
+  </div>
+</div>
 
 <script>
-  // ── Clock ──────────────────────────────────────────────────
-  function updateClock() {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString();
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
+  const BASE = 'https://eventease-mobile-backend.onrender.com';
+  let alerts = [];
 
-  // ── Webhook URL ────────────────────────────────────────────
-  document.getElementById('webhookUrl').textContent =
-    window.location.origin + '/api/twilio/sms';
-
-  // ── Socket.IO ─────────────────────────────────────────────
-  const socket = io();
-  const wsDot    = document.getElementById('wsDot');
-  const wsStatus = document.getElementById('wsStatus');
-
-  socket.on('connect', () => {
-    wsDot.classList.remove('offline');
-    wsStatus.textContent = 'LIVE';
-    addLog('WebSocket connected');
-  });
-
-  socket.on('disconnect', () => {
-    wsDot.classList.add('offline');
-    wsStatus.textContent = 'OFFLINE';
-    addLog('WebSocket disconnected');
-  });
-
-  socket.on('sms_alert', (alert) => {
-    flashScreen();
-    addLog(`NEW ALERT from ${alert.from}: ${alert.message}`);
-    prependAlert(alert);
-    updateStats();
-    showToast(`📲 New alert: ${alert.message.substring(0, 40)}...`);
-  });
-
-  // ── Load Alerts ───────────────────────────────────────────
-  async function loadAlerts() {
+  async function load() {
     try {
-      const res  = await fetch('/api/twilio/alerts');
-      const data = await res.json();
-      renderAlerts(data.alerts || []);
-      updateStatsFrom(data.alerts || []);
+      const r = await fetch(BASE + '/api/twilio/alerts');
+      const d = await r.json();
+      alerts = d.alerts || [];
+      render();
+      document.getElementById('dot').className = 'dot';
+      document.getElementById('status-text').textContent = 'Live';
+      document.getElementById('errBar').style.display = 'none';
+      document.getElementById('lastRefresh').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
     } catch (e) {
-      addLog('Error loading alerts: ' + e.message);
+      document.getElementById('dot').className = 'dot off';
+      document.getElementById('status-text').textContent = 'Offline';
+      document.getElementById('errBar').textContent = '⚠ Could not reach server: ' + e.message;
+      document.getElementById('errBar').style.display = 'block';
     }
   }
 
-  function renderAlerts(alerts) {
-    const list = document.getElementById('alertList');
+  function render() {
+    const unread = alerts.filter(a => !a.read).length;
+    document.getElementById('sTotal').textContent  = alerts.length;
+    document.getElementById('sUnread').textContent = unread;
+    document.getElementById('sRead').textContent   = alerts.length - unread;
+
+    const list = document.getElementById('list');
     if (!alerts.length) {
-      list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>Waiting for alerts from ESIM364...</p></div>`;
+      list.innerHTML = `<div class="empty"><div class="icon">📭</div><p>No alerts yet. Waiting for messages from ESIM364...</p></div>`;
       return;
     }
-    list.innerHTML = alerts.map(a => alertHTML(a)).join('');
+
+    list.innerHTML = alerts.map(a => {
+      const t = new Date(a.timestamp).toLocaleString();
+      return `
+        <div class="card ${a.read ? '' : 'unread'}" onclick="markRead('${a.id}', this)">
+          <div class="card-top">
+            <span class="card-from">${a.from}</span>
+            <div class="card-right">
+              <span class="badge ${a.read ? 'read' : ''}">${a.read ? 'READ' : 'NEW'}</span>
+              <span class="card-time">${t}</span>
+            </div>
+          </div>
+          <div class="card-msg">${a.message}</div>
+        </div>`;
+    }).join('');
   }
 
-  function prependAlert(alert) {
-    const list = document.getElementById('alertList');
-    const empty = list.querySelector('.empty-state');
-    if (empty) list.innerHTML = '';
-    const div = document.createElement('div');
-    div.innerHTML = alertHTML(alert);
-    list.prepend(div.firstChild);
-  }
-
-  function alertHTML(a) {
-    const time = new Date(a.timestamp).toLocaleString();
-    return `
-      <div class="alert-item ${a.read ? '' : 'unread'}" onclick="markRead('${a.id}', this)">
-        <div class="alert-icon">🔔</div>
-        <div class="alert-body">
-          <div class="alert-from">${a.from}</div>
-          <div class="alert-message">${a.message}</div>
-          <div class="alert-time">${time}</div>
-        </div>
-        <span class="alert-badge ${a.read ? 'read' : ''}">
-          ${a.read ? 'READ' : 'NEW'}
-        </span>
-      </div>`;
-  }
-
-  // ── Mark Read ─────────────────────────────────────────────
   async function markRead(id, el) {
-    await fetch(`/api/twilio/alerts/${id}/read`, { method: 'PUT' });
-    el.classList.remove('unread');
-    const badge = el.querySelector('.alert-badge');
-    badge.textContent = 'READ';
-    badge.classList.add('read');
-    updateStats();
-  }
-
-  // ── Clear All ─────────────────────────────────────────────
-  async function clearAlerts() {
-    if (!confirm('Clear all alerts?')) return;
-    await fetch('/api/twilio/alerts', { method: 'DELETE' });
-    document.getElementById('alertList').innerHTML =
-      `<div class="empty-state"><div class="icon">📭</div><p>Waiting for alerts from ESIM364...</p></div>`;
-    updateStatsFrom([]);
-    showToast('All alerts cleared', false);
-  }
-
-  // ── Forward SMS ───────────────────────────────────────────
-  async function forwardSms() {
-    const to  = document.getElementById('fwdTo').value.trim();
-    const msg = document.getElementById('fwdMsg').value.trim();
-    if (!to || !msg) { showToast('Fill in both fields', true); return; }
     try {
-      const res  = await fetch('/api/twilio/forward', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, message: msg }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`✅ Sent to ${to}`);
-        addLog(`Forwarded to ${to}: ${msg}`);
-        document.getElementById('fwdTo').value  = '';
-        document.getElementById('fwdMsg').value = '';
-      } else {
-        showToast(data.message, true);
-      }
+      await fetch(BASE + '/api/twilio/alerts/' + id + '/read', { method: 'PUT' });
+      const a = alerts.find(x => x.id === id);
+      if (a) { a.read = true; render(); }
+    } catch (e) { console.error(e); }
+  }
+
+  async function clearAll() {
+    if (!confirm('Clear all alerts?')) return;
+    try {
+      await fetch(BASE + '/api/twilio/alerts', { method: 'DELETE' });
+      alerts = [];
+      render();
     } catch (e) {
-      showToast('Send failed: ' + e.message, true);
+      alert('Failed to clear: ' + e.message);
     }
   }
 
-  // ── Stats ─────────────────────────────────────────────────
-  function updateStats() {
-    fetch('/api/twilio/alerts')
-      .then(r => r.json())
-      .then(d => updateStatsFrom(d.alerts || []));
-  }
-
-  function updateStatsFrom(alerts) {
-    const unread = alerts.filter(a => !a.read).length;
-    document.getElementById('statTotal').textContent  = alerts.length;
-    document.getElementById('statUnread').textContent = unread;
-    document.getElementById('statRead').textContent   = alerts.length - unread;
-    if (alerts.length) {
-      const last = new Date(alerts[0].timestamp);
-      document.getElementById('statLast').textContent = last.toLocaleTimeString();
-    }
-  }
-
-  // ── Live Log ──────────────────────────────────────────────
-  function addLog(msg) {
-    const log  = document.getElementById('liveLog');
-    const time = new Date().toLocaleTimeString();
-    const div  = document.createElement('div');
-    div.className = 'log-line new';
-    div.textContent = `[${time}] ${msg}`;
-    log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
-    if (log.children.length > 50) log.removeChild(log.firstChild);
-  }
-
-  // ── Helpers ───────────────────────────────────────────────
-  function flashScreen() {
-    const f = document.createElement('div');
-    f.className = 'flash';
-    document.body.appendChild(f);
-    setTimeout(() => f.remove(), 700);
-  }
-
-  function showToast(msg, isError = false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className   = 'toast' + (isError ? ' error' : '') + ' show';
-    setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 3000);
-  }
-
-  // ── Init ──────────────────────────────────────────────────
-  loadAlerts();
+  load();
+  setInterval(load, 15000);
 </script>
 </body>
 </html>

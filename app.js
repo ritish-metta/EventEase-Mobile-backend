@@ -58,7 +58,9 @@ app.use('/api/child-safety', childSafetyRoutes);
 app.use('/api/yoga', yogaRoutes);
 app.use('/api/pmj-sms', pmjSmsRoutes);
 app.use('/api/twilio', twilioSmsRoutes); // ✅ NEW
-
+app.get('/sos-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'sos-dashboard.html'));
+});
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'child-safety-dashboard.html'));
 });
