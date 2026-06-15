@@ -6,6 +6,7 @@ const { initializeLaserGridSprint } = require('../routes/laser_grid_sprint');
 const { initializePhoneFootball } = require('../routes/phone_football');
 const { initializeRuthlessBattle } = require('../routes/ruthless_battle');
 const { callPythonAnalyze } = require('../routes/yoga');
+const { initializeSosSignaling } = require('../routes/sos_signaling');
 
 let io;
 const connectedDevices = new Map();
@@ -40,7 +41,7 @@ const initializeWebSocket = (server) => {
 
   io.on('connection', (socket) => {
     console.log(`New connection: ${socket.id}`);
-
+    initializeSosSignaling(io, socket);
     initializePhoneFootball(io, socket);
     initializeRuthlessBattle(io, socket);
     initializeLaserGridSprint(io, socket);
