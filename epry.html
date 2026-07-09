@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>ePrisons Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f4f6f9;
+    color: #222;
+  }
+  header {
+    background: #1a3c6e;
+    color: white;
+    padding: 18px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 20px; }
+  .container {
+    max-width: 1200px;
+    margin: 30px auto;
+    padding: 0 20px;
+  }
+  .card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 25px;
+  }
+  .card h2 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #1a3c6e;
+  }
+  .form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+  }
+  .form-group {
+    flex: 1;
+    min-width: 180px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 5px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+  .btn {
+    background: #1a3c6e;
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .btn:hover { background: #14305a; }
+  .status-msg {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .status-msg.error { color: #c0392b; }
+  .status-msg.success { color: #1e8449; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 11px;
+    background: #e8f0fe;
+    color: #1a3c6e;
+  }
+  .badge.habitual { background: #fdecea; color: #c0392b; }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    background: white;
+    border-radius: 8px;
+  }
+
+  .prisoner-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .prisoner-header {
+    background: #1a3c6e;
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .prisoner-header h3 { font-size: 15px; }
+  .prisoner-body {
+    padding: 16px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 20px;
+    margin-bottom: 14px;
+  }
+  .detail-item .label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .detail-item .value {
+    font-size: 13px;
+    color: #222;
+    margin-top: 2px;
+  }
+
+  .sub-section { margin-top: 12px; }
+  .sub-section h4 {
+    font-size: 12px;
+    color: #1a3c6e;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  table.sub-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.sub-table th, table.sub-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+  }
+  table.sub-table th {
+    background: #f4f6f9;
+    color: #555;
+    font-weight: 600;
+  }
+  .no-sub { font-size: 12px; color: #999; padding: 6px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ePrisons — Admission &amp; Release Dashboard</h1>
+  <span class="badge" id="countBadge">0 records</span>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Search Release Records</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Jail Code</label>
+        <input type="text" id="jailcode" value="J3600002" />
+      </div>
+      <div class="form-group">
+        <label>Release From Date</label>
+        <input type="text" id="fromdate" placeholder="dd/mm/yyyy" value="18/06/2026" />
+      </div>
+      <div class="form-group">
+        <label>Release To Date</label>
+        <input type="text" id="todate" placeholder="dd/mm/yyyy" value="18/06/2026" />
+      </div>
+    </div>
+    <button class="btn" id="searchBtn">Search</button>
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <div id="resultsArea">
+    <div class="empty-state">No records loaded yet. Click Search to fetch data.</div>
+  </div>
+
+</div>
+
+<script>
+  // Your backend — credentials for ePrisons already live server-side in eprisons_data.js,
+  // so this dashboard just calls straight through, no login needed.
+  const BACKEND_BASE = 'http://localhost:5000';
+
+  const searchBtn = document.getElementById('searchBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const resultsArea = document.getElementById('resultsArea');
+  const countBadge = document.getElementById('countBadge');
+
+  searchBtn.addEventListener('click', fetchRecords);
+
+  // Auto-load on page open with the default values
+  window.addEventListener('DOMContentLoaded', fetchRecords);
+
+  async function fetchRecords() {
+    const jailcode = document.getElementById('jailcode').value.trim();
+    const fromdate = document.getElementById('fromdate').value.trim();
+    const todate = document.getElementById('todate').value.trim();
+
+    statusMsg.textContent = 'Loading...';
+    statusMsg.className = 'status-msg';
+
+    const params = new URLSearchParams({ jailcode, fromdate, todate });
+
+    try {
+      const res = await fetch(`${BACKEND_BASE}/api/eprisons_data?${params.toString()}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        statusMsg.textContent = data.message || 'Failed to fetch data';
+        statusMsg.className = 'status-msg error';
+        resultsArea.innerHTML = '<div class="empty-state">No records found.</div>';
+        countBadge.textContent = '0 records';
+        return;
+      }
+
+      statusMsg.textContent = 'Data loaded successfully';
+      statusMsg.className = 'status-msg success';
+
+      renderRecords(data.records || []);
+
+    } catch (err) {
+      statusMsg.textContent = 'Error: ' + err.message;
+      statusMsg.className = 'status-msg error';
+    }
+  }
+
+  function esc(v) {
+    if (v === null || v === undefined) return '-';
+    return String(v).replaceAll('&amp;amp;', '&').replaceAll('&amp;', '&');
+  }
+
+  function renderRecords(records) {
+    countBadge.textContent = `${records.length} record${records.length === 1 ? '' : 's'}`;
+
+    if (!records.length) {
+      resultsArea.innerHTML = '<div class="empty-state">No records found.</div>';
+      return;
+    }
+
+    let html = '';
+
+    records.forEach(r => {
+      const isHabitual = (r.tendencytype || '').toLowerCase() === 'habitual';
+      const cases = r.casedetails || [];
+      const visitors = r.visitordetails || [];
+
+      html += `
+        <div class="prisoner-card">
+          <div class="prisoner-header">
+            <h3>${esc(r.prisonername)} (PID: ${esc(r.pidno)})</h3>
+            <span class="badge ${isHabitual ? 'habitual' : ''}">${esc(r.tendencytype) || 'Standard'}</span>
+          </div>
+          <div class="prisoner-body">
+            <div class="detail-grid">
+              <div class="detail-item"><div class="label">Jail</div><div class="value">${esc(r.jailname)}</div></div>
+              <div class="detail-item"><div class="label">Prisoner Type</div><div class="value">${esc(r.prisonertype)}</div></div>
+              <div class="detail-item"><div class="label">Father's Name</div><div class="value">${esc(r.fathername)}</div></div>
+              <div class="detail-item"><div class="label">Gender / Age</div><div class="value">${esc(r.gender)} / ${esc(r.age)}</div></div>
+              <div class="detail-item"><div class="label">Religion</div><div class="value">${esc(r.religion)}</div></div>
+              <div class="detail-item"><div class="label">Release Type</div><div class="value">${esc(r.releasetype)}</div></div>
+              <div class="detail-item"><div class="label">Release Date</div><div class="value">${esc(r.releasedate)}</div></div>
+              <div class="detail-item"><div class="label">Admission Date</div><div class="value">${esc(r.admissiondate)}</div></div>
+              <div class="detail-item"><div class="label">Police Station</div><div class="value">${esc(r.policestationname)}</div></div>
+              <div class="detail-item"><div class="label">District</div><div class="value">${esc(r.presentdistrictname)}</div></div>
+              <div class="detail-item"><div class="label">Address</div><div class="value">${esc(r.presentaddress)}</div></div>
+              <div class="detail-item"><div class="label">Occupation</div><div class="value">${esc(r.occupationname)}</div></div>
+            </div>
+
+            <div class="sub-section">
+              <h4>Case Details (${cases.length})</h4>
+              ${cases.length ? `
+                <table class="sub-table">
+                  <thead><tr>
+                    <th>Case Type</th><th>FIR No</th><th>FIR Date</th><th>Act/Section</th><th>Police Station</th><th>Court</th>
+                  </tr></thead>
+                  <tbody>
+                    ${cases.map(c => `
+                      <tr>
+                        <td>${esc(c.casetype)}</td>
+                        <td>${esc(c.firno)}</td>
+                        <td>${esc(c.firdate)}</td>
+                        <td>${esc(c.actsection)}</td>
+                        <td>${esc(c.policestationname)}</td>
+                        <td>${esc(c.courtname)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : '<div class="no-sub">No case details</div>'}
+            </div>
+
+            <div class="sub-section">
+              <h4>Visitor Details (${visitors.length})</h4>
+              ${visitors.length ? `
+                <table class="sub-table">
+                  <thead><tr>
+                    <th>Visitor Name</th><th>Relation</th><th>Visit Date</th><th>Status</th><th>Mode</th>
+                  </tr></thead>
+                  <tbody>
+                    ${visitors.map(v => `
+                      <tr>
+                        <td>${esc(v.visitorname)}</td>
+                        <td>${esc(v.relation)}</td>
+                        <td>${esc(v.visitdate)}</td>
+                        <td>${esc(v.visitstatus)}</td>
+                        <td>${esc(v.visitmode)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : '<div class="no-sub">No visitor details</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    resultsArea.innerHTML = html;
+  }
+</script>
+
+</body>
+</html>
