@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TGCOP 2.0 — Demo Prototype (Offline)</title>
+<style>
+/* ═══ TGCOP 2.0 OFFLINE DEMO · ALL DATA SIMULATED ═══ */
+:root{
+  --bg:#0A1422; --panel:#13233B; --panel2:#1A2F4E; --line:#24405F; --lineSoft:#1C3450;
+  --gold:#D4AC2B; --goldSoft:#F0CE5C; --red:#E5484D; --redSoft:#FF8589;
+  --green:#30A46C; --blue:#4C9AE0; --cyan:#3CC8C8; --violet:#9A7BD8;
+  --mist:#8FA8C7; --white:#F4F8FD;
+  --fd:'Arial Narrow','Roboto Condensed','Segoe UI',sans-serif;
+  --fb:'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --fm:'Consolas','Courier New',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050B14;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:14px;font-family:var(--fb)}
+.phone{width:400px;height:790px;max-height:96vh;background:var(--bg);border-radius:30px;border:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 30px 90px rgba(0,0,0,.7)}
+.statusbar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 7px;font-family:var(--fm);font-size:9.5px;color:var(--mist);border-bottom:1px solid var(--lineSoft);background:#0B1626}
+.statusbar .brand{color:var(--mist)} .statusbar .brand b{color:var(--gold)} .statusbar .demo{color:var(--cyan)}
+.content{flex:1;overflow-y:auto;scrollbar-width:none}
+.content::-webkit-scrollbar{width:0}
+.screen{padding:18px}
+.eyebrow{font-family:var(--fm);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mist)}
+h2{font-family:var(--fd);font-size:23px;font-weight:700;color:var(--white);margin:3px 0 12px;letter-spacing:.02em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--gold);color:#081120;border:none;font-family:var(--fd);font-weight:700;letter-spacing:.06em;font-size:13.5px;text-transform:uppercase;padding:11px 15px;border-radius:7px;cursor:pointer;width:auto}
+.btn.full{width:100%}.btn.small{font-size:11.5px;padding:7px 11px}
+.btn.ghost{background:transparent;border:1px solid var(--gold);color:var(--gold)}
+.btn.red{background:var(--red);color:#fff}.btn.ghost.red{background:transparent;color:var(--red);border-color:var(--red)}
+.btn.green{background:var(--green);color:#06130c}.btn.blue{background:transparent;color:var(--blue);border:1px solid var(--blue)}
+.btn.cyan{background:var(--cyan);color:#06211f}.btn.ghost.cyan{background:transparent;color:var(--cyan);border-color:var(--cyan)}
+.btn.violet{background:var(--violet);color:#170c2b}.btn.ghost.violet{background:transparent;color:var(--violet);border-color:var(--violet)}
+.btn.ghost.mist{background:transparent;color:var(--mist);border:1px solid var(--mist)}
+.btn.white{background:var(--white);color:#081120}
+.tag{font-family:var(--fm);font-size:9.5px;font-weight:700;border-radius:5px;padding:2.5px 7px;letter-spacing:.06em;display:inline-block}
+.tag.gold{color:var(--gold);background:rgba(212,172,43,.12);border:1px solid rgba(212,172,43,.35)}
+.tag.red{color:var(--redSoft);background:rgba(229,72,77,.12);border:1px solid rgba(229,72,77,.4)}
+.tag.green{color:var(--green);background:rgba(48,164,108,.12);border:1px solid rgba(48,164,108,.4)}
+.tag.blue{color:var(--blue);background:rgba(76,154,224,.12);border:1px solid rgba(76,154,224,.4)}
+.tag.cyan{color:var(--cyan);background:rgba(60,200,200,.12);border:1px solid rgba(60,200,200,.4)}
+.tag.violet{color:var(--violet);background:rgba(154,123,216,.12);border:1px solid rgba(154,123,216,.4)}
+.tag.mist{color:var(--mist);background:rgba(143,168,199,.1);border:1px solid rgba(143,168,199,.3)}
+.row{display:flex;justify-content:space-between;padding:4.5px 0;border-bottom:1px solid var(--lineSoft)}
+.row .k{font-family:var(--fm);font-size:10.5px;color:var(--mist)}
+.row .v{font-family:var(--fm);font-size:10.5px;color:var(--white);font-weight:700;text-align:right}
+.v.red{color:var(--redSoft)}.v.gold{color:var(--goldSoft)}.v.green{color:var(--green)}.v.cyan{color:var(--cyan)}
+input,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--white);font-family:var(--fm);font-size:13px;padding:10px 12px;border-radius:7px;margin-top:6px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.back{background:none;border:none;color:var(--mist);display:flex;align-items:center;gap:4px;font-family:var(--fm);font-size:11px;cursor:pointer;padding:0 0 8px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:9px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 9px;cursor:pointer;text-align:center;transition:border-color .12s}
+.tile:hover{border-color:var(--gold)}
+.tile .ic{width:34px;height:34px;margin:0 auto 7px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.tile .lbl{font-family:var(--fd);font-size:11.5px;font-weight:700;color:var(--white);line-height:1.15}
+.tile .sub{font-family:var(--fm);font-size:7.5px;color:var(--mist);margin-top:3px;letter-spacing:.04em;text-transform:uppercase}
+.tile .sub.hot{color:var(--redSoft)}
+.statgrid{display:flex;gap:8px;margin-top:12px}
+.stat{flex:1;background:var(--bg);border-radius:9px;padding:8px 4px;text-align:center;border:1px solid var(--lineSoft)}
+.stat .n{font-family:var(--fd);font-size:17px;font-weight:700}
+.stat .l{font-family:var(--fm);font-size:8px;color:var(--mist);letter-spacing:.08em;text-transform:uppercase}
+.pipeline{display:flex;align-items:center;margin:13px 0 9px}
+.pip{display:flex;flex-direction:column;align-items:center}
+.pip .dot{width:11px;height:11px;border-radius:50%;background:var(--panel2);border:2px solid var(--line)}
+.pip.on .dot{background:var(--gold);border-color:var(--gold)}
+.pip .lab{font-family:var(--fm);font-size:6.8px;color:var(--mist);margin-top:3px}
+.pip.on .lab{color:var(--goldSoft)}
+.pipbar{flex:1;height:2px;background:var(--line);margin:0 2px 12px}
+.pipbar.on{background:var(--gold)}
+.navbar{display:flex;border-top:1px solid var(--lineSoft);background:#0B1626}
+.navbtn{flex:1;background:none;border:none;padding:9px 0 10px;cursor:pointer;color:var(--mist);text-align:center}
+.navbtn.on{color:var(--gold)}
+.navbtn .nl{font-family:var(--fm);font-size:7.8px;letter-spacing:.08em;margin-top:3px;text-transform:uppercase}
+.sosfab{position:absolute;right:13px;bottom:74px;width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 35% 30%,var(--red),#9c181c);color:#fff;border:none;font-family:var(--fd);font-weight:700;font-size:12px;cursor:pointer;animation:pulse 2.2s infinite;z-index:20}
+.toast{position:absolute;top:42px;left:14px;right:14px;z-index:30;background:linear-gradient(120deg,var(--red),#a91f24);color:#fff;font-family:var(--fd);font-weight:700;font-size:12.5px;padding:10px 13px;border-radius:9px;text-align:center;letter-spacing:.05em;box-shadow:0 8px 28px rgba(229,72,77,.4);display:none}
+.sosoverlay{position:absolute;inset:0;z-index:40;background:rgba(12,4,7,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:15px;padding:24px;text-align:center}
+.soscircle{width:108px;height:108px;border-radius:50%;background:radial-gradient(circle,var(--red),#8f1417);display:flex;align-items:center;justify-content:center;animation:pulse 1.1s infinite}
+.heatgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px}
+.heatcell{aspect-ratio:1;border-radius:4px;border:1px solid var(--lineSoft);display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:8px;font-weight:700;color:#fff}
+.camgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.cam{border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.cam .feed{height:78px;position:relative;display:flex;align-items:center;justify-content:center}
+.cam .meta{padding:7px 9px;background:var(--panel)}
+.cam .meta .n{font-family:var(--fm);font-size:9.5px;color:var(--white);font-weight:700}
+.cam .meta .l{font-family:var(--fm);font-size:8.5px;color:var(--mist)}
+.scanbox{position:relative;height:220px;background:radial-gradient(circle at 50% 45%,var(--panel2),var(--bg));display:flex;align-items:center;justify-content:center;border-radius:10px 10px 0 0}
+.face{width:110px;height:140px;border-radius:50% 50% 46% 46%;border:2px dashed var(--cyan);position:relative;display:flex;align-items:center;justify-content:center}
+.scanline{position:absolute;left:0;right:0;height:2px;background:var(--cyan);box-shadow:0 0 12px var(--cyan);animation:scanline 1s linear infinite;display:none}
+.corner{position:absolute;width:22px;height:22px;opacity:.7}
+.bars{display:flex;align-items:flex-end;gap:4px;height:64px;margin-top:10px}
+.bar{flex:1;border-radius:3px 3px 0 0;opacity:.85}
+.progress{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:12px}
+.progress .fill{height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .4s}
+.mono-note{font-family:var(--fm);font-size:9px;color:var(--mist);margin-top:9px;line-height:1.6}
+.flexrow{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.55)}50%{box-shadow:0 0 0 13px rgba(229,72,77,0)}}
+@keyframes scanline{0%{top:8%}50%{top:88%}100%{top:8%}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+@media (max-width:430px){.phone{width:100%;height:100vh;max-height:none;border-radius:0}}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="statusbar">
+    <span class="brand">🛡 <b>TGCOP 2.0</b> · <span class="demo">OFFLINE DEMO</span></span>
+    <span>21:42 · ▮▮▮ · 🔒</span>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <div class="sosoverlay" id="sosOverlay">
+    <div class="soscircle"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M7 18a5 5 0 0 1 10 0v2H7v-2z"/><path d="M12 2v3M4.2 5.2l2.1 2.1M19.8 5.2l-2.1 2.1M2 11h3M19 11h3"/></svg></div>
+    <div style="font-family:var(--fd);font-size:18px;font-weight:700;color:#fff">OFFICER SOS BROADCAST</div>
+    <div style="font-family:var(--fm);font-size:10.5px;color:#FFB4B6;line-height:1.7">Live location → TGICCC control room<br>3 nearest units alerted · supervisor paged<br>Body-cam auto-recording started</div>
+    <button class="btn white" onclick="hideSOS()">Stand down (demo)</button>
+  </div>
+
+  <div class="content" id="content"></div>
+
+  <button class="sosfab" id="sosFab" onclick="showSOS()" style="display:none" aria-label="Officer SOS">SOS</button>
+  <div class="navbar" id="navbar" style="display:none">
+    <button class="navbtn" data-nav="home" onclick="go('home')"><div>🛡</div><div class="nl">Deck</div></button>
+    <button class="navbtn" data-nav="d112" onclick="go('d112')"><div>📡</div><div class="nl">112</div></button>
+    <button class="navbtn" data-nav="hotspot" onclick="go('hotspot')"><div>🗺</div><div class="nl">Hotspots</div></button>
+    <button class="navbtn" data-nav="hawkeye" onclick="go('hawkeye')"><div>👁</div><div class="nl">Hawk Eye</div></button>
+    <button class="navbtn" data-nav="hrms" onclick="go('hrms')"><div>👥</div><div class="nl">HRMS</div></button>
+  </div>
+</div>
+
+<script>
+/* ═══ ALL DATA BELOW IS SIMULATED · DEMO ONLY ═══ */
+var S = { screen:'login', incident:false, stage:0, frsPhase:0, challanIssued:false, esStep:0,
+  points:[1,1,1,0,0,0], cctnsResult:null };
+
+var PERSONS = [
+ {id:'CR-TG-2214',name:'Demo Offender A',age:34,addr:'Begumpet, HYD',flags:['HISTORY SHEETER'],cases:4,mo:'Chain snatching · two-wheeler · pillion grab',seen:'SR Nagar, 4d ago',risk:72},
+ {id:'CR-TG-0871',name:'Demo Offender C',age:41,addr:'Warangal',flags:['WANTED · NBW'],cases:7,mo:'House break-in (day) · rear entry · gold targets',seen:'Unknown',risk:91},
+ {id:'CR-TG-1042',name:'Demo Person B',age:27,addr:'Karimnagar',flags:[],cases:0,mo:'—',seen:'—',risk:4}
+];
+var HEAT = [1,1,2,1,0,0,1,0, 1,3,4,2,1,0,0,0, 0,2,5,3,1,1,0,0, 0,1,3,2,0,2,3,1, 0,0,1,1,0,3,5,2, 1,0,0,0,1,2,4,2, 0,1,0,0,0,1,2,1];
+var STAGES = ['DISPATCHED','ACCEPTED','EN-ROUTE','ON-SCENE','CLOSED'];
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function eyebrow(t,c){return '<div class="eyebrow"'+(c?' style="color:'+c+'"':'')+'>'+t+'</div>'}
+function row(k,v,cls){return '<div class="row"><span class="k">'+k+'</span><span class="v '+(cls||'')+'">'+v+'</span></div>'}
+function back(){return '<button class="back" onclick="go(\'home\')">‹ COMMAND DECK</button>'}
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(function(){t.style.display='none'},2800)}
+function showSOS(){document.getElementById('sosOverlay').style.display='flex'}
+function hideSOS(){document.getElementById('sosOverlay').style.display='none'}
+
+function fire112(){S.incident=true;S.stage=0;toast('🚨 NEW 112 DISPATCH · P1 HIGH');go('d112')}
+
+/* ── MODULE DEFINITIONS for home grid ── */
+var MODS = [
+ ['d112','📡','Dial 112','red',function(){return S.incident?'1 ACTIVE':'Standby'}],
+ ['cctns','🗄','CCTNS Search','blue',function(){return 'FIR · Person'}],
+ ['frs','🧬','FRS','cyan',function(){return 'Face recognition'}],
+ ['esakshya','🔏','e-Sakshya','gold',function(){return 'BNSS evidence'}],
+ ['cctv','🎥','CCTV Grid','violet',function(){return 'Nenu Saitham'}],
+ ['tower','📶','Mobile/Tower','blue',function(){return 'CDR · IMEI'}],
+ ['hotspot','🗺','Hotspots','red',function(){return 'Predictive grid'}],
+ ['mo','🕵','MO Offenders','gold',function(){return 'Modus operandi'}],
+ ['point','📒','Point Book','green',function(){return 'QR check-in'}],
+ ['c1930','☎','Cyber 1930','cyan',function(){return 'Fraud freeze'}],
+ ['hawkeye','👁','Hawk Eye','violet',function(){return '3 reports'}],
+ ['traffic','🚗','Traffic','gold',function(){return 'e-Challan · ANPR'}],
+ ['tsafe','🧭','T-Safe','green',function(){return '2 live journeys'}],
+ ['sosfeed','🚨','SOS Feed','red',function(){return 'Citizen + officer'}],
+ ['jail','🚪','Release Alerts','red',function(){return '1 in your zone'}],
+ ['osint','🌐','OSINT','blue',function(){return 'Open-source intel'}],
+ ['hrms','👥','HRMS','mist',function(){return 'Duty · leave'}]
+];
+var ICCOL = {red:'rgba(229,72,77,.16)',blue:'rgba(76,154,224,.16)',cyan:'rgba(60,200,200,.16)',gold:'rgba(212,172,43,.16)',violet:'rgba(154,123,216,.16)',green:'rgba(48,164,108,.16)',mist:'rgba(143,168,199,.12)'};
+
+/* ── SCREENS ── */
+var SCREENS = {
+
+login: function(){
+ return '<div style="display:flex;flex-direction:column;justify-content:center;height:100%;padding:26px;gap:16px;background:radial-gradient(ellipse at 50% -10%,var(--panel2) 0%,var(--bg) 60%)">'
+ +'<div style="text-align:center"><div style="width:70px;height:70px;margin:0 auto 12px;border-radius:18px;background:linear-gradient(135deg,var(--gold),#8a6d12);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(212,172,43,.27);font-size:34px">🛡</div>'
+ +'<div style="font-family:var(--fd);font-size:32px;font-weight:700;color:var(--white)">TGCOP <span style="color:var(--gold)">2.0</span></div>'
+ +eyebrow('Telangana Police · Preventive Policing Suite')
+ +'<div style="margin-top:8px"><span class="tag cyan">OFFLINE DEMO · MOCK DATA ONLY</span></div></div>'
+ +'<div class="card">'+eyebrow('Service ID')+'<input value="TG-SI-104522" readonly>'
+ +'<div style="height:10px"></div>'+eyebrow('Biometric')
+ +'<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 12px;background:var(--bg);border-radius:7px;border:1px solid var(--line)"><span style="font-size:18px">👆</span><span style="font-family:var(--fm);font-size:11px;color:var(--green)">FINGERPRINT VERIFIED · DEVICE BOUND</span></div></div>'
+ +'<button class="btn full" onclick="go(\'home\')">Enter Command Deck</button>'
+ +'<div style="font-family:var(--fm);font-size:9.5px;color:var(--mist);text-align:center">Zero-trust · TLS 1.3 · Every action audit-logged · DPDP compliant</div></div>';
+},
+
+home: function(){
+ var tiles = MODS.map(function(m){
+  var hot = (m[0]==='d112'&&S.incident)||m[0]==='jail';
+  return '<div class="tile" onclick="go(\''+m[0]+'\')"><div class="ic" style="background:'+ICCOL[m[3]]+'"><span style="font-size:16px">'+m[1]+'</span></div>'
+   +'<div class="lbl">'+m[2]+'</div><div class="sub'+(hot?' hot':'')+'">'+m[4]()+'</div></div>';
+ }).join('');
+ return '<div class="screen">'
+ +'<div style="background:linear-gradient(120deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px">'
+ +'<div style="display:flex;justify-content:space-between;align-items:center"><div>'+eyebrow('SI 104522 · Beat 04 · Ameerpet','var(--gold)')
+ +'<div style="font-family:var(--fd);font-size:19px;font-weight:700;color:var(--white);margin-top:2px">Command Deck</div></div>'
+ +'<div style="text-align:right"><span class="tag green">● ON DUTY</span><div style="font-family:var(--fm);font-size:9px;color:var(--mist);margin-top:5px">GPS LOCKED · SYNC 21:42</div></div></div>'
+ +'<div class="statgrid">'
+ +'<div class="stat"><div class="n" style="color:var(--gold)">7</div><div class="l">Tasks</div></div>'
+ +'<div class="stat"><div class="n" style="color:var(--red)">3</div><div class="l">Alerts</div></div>'
+ +'<div class="stat"><div class="n" style="color:var(--green)">12</div><div class="l">Beat pts</div></div>'
+ +'<div class="stat"><div class="n" style="color:var(--cyan)">92%</div><div class="l">Sync</div></div></div></div>'
+ +'<div onclick="go(\'jail\')" style="display:flex;align-items:center;gap:8px;background:rgba(229,72,77,.08);border:1px solid rgba(229,72,77,.4);border-radius:9px;padding:8px 11px;margin-bottom:14px;cursor:pointer">'
+ +'<span>⚠</span><div style="font-family:var(--fm);font-size:10px;color:var(--redSoft);flex:1">RELEASE ALERT: Burglary offender releasing 14 Jun into your beat zone</div></div>'
+ +(S.incident?'':'<button class="btn full red" style="margin-bottom:14px" onclick="fire112()">📡 Simulate incoming 112 dispatch</button>')
+ +eyebrow('Preventive policing modules','var(--gold)')
+ +'<div class="grid3">'+tiles+'</div></div>';
+},
+
+d112: function(){
+ if(!S.incident) return '<div class="screen">'+back()+eyebrow('Dial 112 · ERSS','var(--red)')+'<h2>Emergency Dispatch</h2>'
+  +'<div class="card" style="text-align:center;padding:26px"><div style="font-size:26px;margin-bottom:8px">📡</div><div style="font-family:var(--fd);font-size:15px;color:var(--mist)">Unit MN-21 · AVAILABLE</div></div></div>';
+ var closed = S.stage===4;
+ var pips = STAGES.map(function(s,i){
+  var h = '<div class="pip'+(i<=S.stage?' on':'')+'"><div class="dot"></div><div class="lab">'+s+'</div></div>';
+  if(i<4) h += '<div class="pipbar'+(i<S.stage?' on':'')+'"></div>';
+  return h;
+ }).join('');
+ var btnLabel = ['Accept incident','Mark en-route','Arrived on scene','Close incident'][S.stage];
+ return '<div class="screen">'+back()+eyebrow('Dial 112 · ERSS · Live','var(--red)')+'<h2>ERSS-112-048213</h2>'
+ +'<div class="card" style="border-color:'+(closed?'var(--green)':'var(--red)')+'">'
+ +'<div style="display:flex;justify-content:space-between"><span class="tag red">P1 · HIGH</span><span style="font-family:var(--fm);font-size:9.5px;color:var(--mist)">21:42 IST</span></div>'
+ +'<div style="font-size:13.5px;color:var(--white);margin:9px 0 4px">Domestic disturbance — caller reports altercation</div>'
+ +row('LOCATION','Ameerpet Metro Gate 2')+row('DISTANCE','1.8 km · ETA 6 min','gold')
+ +'<div class="pipeline">'+pips+'</div>'
+ +(!closed
+   ? '<button class="btn full '+(S.stage===0?'green':'')+'" onclick="S.stage=Math.min(S.stage+1,4);render()">'+btnLabel+'</button>'
+   : '<div style="font-family:var(--fd);color:var(--green);font-size:13.5px;text-align:center;padding:4px">✓ Closed · Logged to response register</div>')
+ +'</div>'
+ +'<div class="flexrow"><button class="btn small blue">Backup</button><button class="btn small blue">108 Med</button><button class="btn small blue">101 Fire</button><button class="btn small ghost violet" onclick="go(\'esakshya\')">Open e-Sakshya</button></div>'
+ +'<div class="mono-note">📶 GPS streaming to TGICCC every 5s</div>'
+ +(closed?'<div style="margin-top:11px"><button class="btn full ghost" onclick="S.incident=false;go(\'home\')">Return to available</button></div>':'')
+ +'</div>';
+},
+
+cctns: function(){
+ var r = S.cctnsResult, body='';
+ if(r==='none') body='<div class="card"><div style="font-size:12.5px;color:var(--mist)">No demo record. Try "Offender A" or "Offender C".</div></div>';
+ else if(r){
+  body='<div class="card" style="border-color:'+(r.flags.length?'var(--red)':'var(--green)')+'">'
+  +'<div style="display:flex;gap:11px"><div style="width:52px;height:60px;border-radius:8px;background:linear-gradient(135deg,var(--panel2),var(--bg));border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>'
+  +'<div style="flex:1"><div style="font-family:var(--fd);font-size:16.5px;font-weight:700;color:var(--white)">'+esc(r.name)+'</div>'
+  +'<div style="font-family:var(--fm);font-size:9.5px;color:var(--mist)">'+r.id+' · Age '+r.age+' · '+esc(r.addr)+'</div>'
+  +'<div style="margin-top:5px">'+(r.flags.length?r.flags.map(function(f){return '<span class="tag red">⚠ '+f+'</span> '}).join(''):'<span class="tag green">✓ NO FLAGS</span>')+'</div></div></div>'
+  +'<div style="margin-top:10px">'+row('LINKED CASES',r.cases)+row('MODUS OPERANDI',esc(r.mo))+row('LAST SIGHTING',esc(r.seen))
+  +row('AI RISK SCORE',r.risk+'/100',r.risk>60?'red':'green')+'</div>'
+  +'<div class="flexrow"><button class="btn small ghost cyan" onclick="go(\'frs\')">Run FRS match</button><button class="btn small blue">Full dossier</button></div></div>';
+ }
+ return '<div class="screen">'+back()+eyebrow('CCTNS · ICJS · NCRB federated search','var(--blue)')+'<h2>CCTNS Search</h2>'
+ +'<div style="display:flex;gap:7px"><input id="cctnsQ" placeholder="Name / CR ID… try \'Offender\'" style="margin-top:0;flex:1" onkeydown="if(event.key===\'Enter\')cctnsSearch()"><button class="btn small" onclick="cctnsSearch()">🔍</button></div>'
+ +'<div class="flexrow" style="margin:9px 0 13px"><span class="tag mist">FIR</span><span class="tag mist">Person</span><span class="tag mist">Property</span><span class="tag mist">Vehicle</span><span class="tag mist">Missing</span></div>'
+ +body+'</div>';
+},
+
+frs: function(){
+ var p=S.frsPhase, inner;
+ if(p<2){
+  inner='<button class="btn full cyan" onclick="frsScan()" '+(p===1?'disabled':'')+'>'+(p===1?'Scanning…':'Capture &amp; match')+'</button>';
+ } else {
+  inner='<div style="display:flex;justify-content:space-between;align-items:center"><div>'
+  +'<div style="font-family:var(--fd);font-size:16px;font-weight:700;color:var(--white)">Demo Offender C</div>'
+  +'<div style="font-family:var(--fm);font-size:9.5px;color:var(--mist)">CR-TG-0871 · gallery: 2.1M faces</div></div>'
+  +'<div style="text-align:center"><div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--red)">96.4%</div><div style="font-family:var(--fm);font-size:7.5px;color:var(--mist)">CONFIDENCE</div></div></div>'
+  +'<div style="margin-top:8px"><span class="tag red">⚠ WANTED · NBW PENDING</span></div>'
+  +'<div class="mono-note">Match is investigative lead only — NOT probable cause by itself. Human verification &amp; supervisor sign-off required. Query audit-logged with officer ID + GPS.</div>'
+  +'<div style="margin-top:10px"><button class="btn small ghost cyan" onclick="S.frsPhase=0;render()">New scan</button></div>';
+ }
+ return '<div class="screen">'+back()+eyebrow('Facial Recognition System · on-device + server','var(--cyan)')+'<h2>FRS Live Scan</h2>'
+ +'<div class="card" style="padding:0;overflow:hidden">'
+ +'<div class="scanbox">'
+ +'<div class="face" style="border-style:'+(p===1?'solid':'dashed')+';border-color:'+(p===2?'var(--red)':'var(--cyan)')+'"><span style="font-size:42px;opacity:.8">'+(p===2?'🚨':'🧬')+'</span><div class="scanline" style="display:'+(p===1?'block':'none')+'"></div></div>'
+ +'<div class="corner" style="top:14px;left:14px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan)"></div>'
+ +'<div class="corner" style="top:14px;right:14px;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan)"></div>'
+ +'<div class="corner" style="bottom:14px;left:14px;border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan)"></div>'
+ +'<div class="corner" style="bottom:14px;right:14px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan)"></div>'
+ +'<div style="position:absolute;bottom:10px;font-family:var(--fm);font-size:9px;color:var(--cyan);letter-spacing:.15em">'
+ +(p===0?'CAMERA FEED · SIMULATED':p===1?'EXTRACTING 512-D EMBEDDING…':'MATCH RETURNED · 240ms')+'</div></div>'
+ +'<div style="padding:14px">'+inner+'</div></div></div>';
+},
+
+esakshya: function(){
+ var body;
+ if(S.esStep===0){
+  body='<div class="card">'+row('CASE REF','FIR 214/2026 · PS Ameerpet')+row('EVIDENCE TYPE','Scene videography · 4K')+row('OFFICER','SI 104522 · GPS LOCKED')
+  +'<div style="margin:12px 0;border:1px dashed var(--line);border-radius:9px;padding:20px;text-align:center"><div style="font-size:24px;margin-bottom:6px">📷</div>'
+  +'<div style="font-family:var(--fm);font-size:10px;color:var(--mist)">Max 4 min clip · auto geotag + timestamp watermark</div></div>'
+  +'<button class="btn full" onclick="S.esStep=1;render()">● Record evidence (simulated)</button></div>';
+ } else {
+  body='<div class="card" style="border-color:var(--green)">'
+  +'<div style="font-family:var(--fd);font-size:16px;color:var(--green);font-weight:700">✓ Evidence sealed</div>'
+  +'<div style="margin-top:9px">'+row('FILE','ES-2026-0612-0041.mp4 · 212 MB')+row('SHA-256 HASH','9f2a…c41b','gold')
+  +row('GEOTAG','17.4375°N 78.4483°E ±3m')+row('CHAIN OF CUSTODY','Block #1 created','green')+row('UPLOAD','NIC cloud · encrypted','green')+'</div>'
+  +'<div class="mono-note">Hash registered before upload — any alteration breaks chain. Certificate auto-generated for court submission under BSA §63.</div>'
+  +'<div style="margin-top:10px"><button class="btn small ghost" onclick="S.esStep=0;render()">Capture next item</button></div></div>';
+ }
+ return '<div class="screen">'+back()+eyebrow('e-Sakshya · BNSS §105/§173 evidence capture','var(--gold)')+'<h2>e-Sakshya Recorder</h2>'+body+'</div>';
+},
+
+cctv: function(){
+ var cams=[['AMR-MTR-02','Metro Gate 2',1,'135deg'],['SRN-JNC-11','SR Nagar X',1,'175deg'],['YSF-MKT-07','Yousufguda Mkt',1,'215deg'],['AMR-BUS-04','Bus stop east',0,'']];
+ var grid=cams.map(function(c){
+  return '<div class="cam" style="border-color:'+(c[2]?'var(--line)':'var(--red)')+'"><div class="feed" style="background:'+(c[2]?'linear-gradient('+c[3]+',#1b3050,#0c1828)':'#1a0f12')+'">'
+  +'<span style="font-size:18px;opacity:.6">'+(c[2]?'🎥':'⚠')+'</span>'
+  +'<div style="position:absolute;top:6px;left:7px"><span class="tag '+(c[2]?'red':'red')+'">'+(c[2]?'● REC':'OFFLINE')+'</span></div></div>'
+  +'<div class="meta"><div class="n">'+c[0]+'</div><div class="l">'+c[1]+'</div></div></div>';
+ }).join('');
+ return '<div class="screen">'+back()+eyebrow('Nenu Saitham · Safe City · TGICCC feed','var(--violet)')+'<h2>CCTV Grid — Beat 04</h2>'
+ +'<div class="camgrid">'+grid+'</div>'
+ +'<div class="card" style="margin-top:11px">'+eyebrow('AI video analytics — tonight','var(--violet)')
+ +'<div style="margin-top:7px">'+row('ANPR HITS (BOLO)','2 — flagged to patrol','red')+row('LOITERING ALERT','1 · bus stop east 21:14','gold')+row('CAM UPTIME (BEAT)','94.6%','green')+'</div>'
+ +'<div style="margin-top:10px"><button class="btn small ghost violet">Request footage pull (logged)</button></div></div></div>';
+},
+
+tower: function(){
+ return '<div class="screen">'+back()+eyebrow('Lawful interception support · SP-approval gated','var(--blue)')+'<h2>Mobile / Tower Search</h2>'
+ +'<div class="card">'+eyebrow('New request')
+ +'<div style="display:flex;gap:6px;margin:9px 0">'
+ +'<div style="flex:1;text-align:center;padding:10px 4px;border-radius:8px;background:rgba(76,154,224,.12);border:1px solid var(--blue)"><div style="font-size:14px">📱</div><div style="font-family:var(--fm);font-size:8px;color:var(--blue)">CDR</div></div>'
+ +'<div style="flex:1;text-align:center;padding:10px 4px;border-radius:8px;background:var(--bg);border:1px solid var(--line)"><div style="font-size:14px">📶</div><div style="font-family:var(--fm);font-size:8px;color:var(--mist)">TOWER DUMP</div></div>'
+ +'<div style="flex:1;text-align:center;padding:10px 4px;border-radius:8px;background:var(--bg);border:1px solid var(--line)"><div style="font-size:14px">📳</div><div style="font-family:var(--fm);font-size:8px;color:var(--mist)">IMEI TRACE</div></div></div>'
+ +row('CASE LINK (MANDATORY)','FIR 214/2026')+row('LEGAL BASIS','BNSS §94 notice')+row('APPROVAL CHAIN','SHO → ACP → SP','gold')
+ +'<div style="margin-top:11px"><button class="btn full" style="background:var(--blue);color:#06141f">Submit for approval</button></div>'
+ +'<div class="mono-note">No raw data is returned to this device. Results route to the designated analysis cell only after SP digital sign-off. All requests immutable-logged.</div></div>'
+ +'<div class="card">'+eyebrow('My requests')+row('REQ-7741 · CDR','APPROVED · with cell','green')+row('REQ-7705 · TOWER DUMP','PENDING SP','gold')+'</div></div>';
+},
+
+hotspot: function(){
+ var cells=HEAT.map(function(v){
+  var bg = v===0?'var(--bg)':'rgba(229,72,77,'+(0.12+(v/5)*0.75)+')';
+  return '<div class="heatcell" style="background:'+bg+';'+(v>=4?'border-color:var(--red)':'')+'">'+(v>=4?v:'')+'</div>';
+ }).join('');
+ return '<div class="screen">'+back()+eyebrow('Predictive analytics · 30-day pattern model','var(--red)')+'<h2>Crime Hotspot Grid</h2>'
+ +'<div class="card" style="padding:12px"><div class="heatgrid">'+cells+'</div>'
+ +'<div style="display:flex;justify-content:space-between;margin-top:9px;font-family:var(--fm);font-size:8.5px;color:var(--mist)"><span>BEAT 04 SECTOR MAP · 250m CELLS</span><span>RED = INCIDENT DENSITY</span></div></div>'
+ +'<div class="card">'+eyebrow("Tonight's model output",'var(--red)')
+ +'<div style="margin-top:7px">'+row('TOP RISK CELL','SR Nagar Jn · vehicle theft','red')+row('PATTERN','2W theft · 22:00–01:00 · Fri/Sat')
+ +row('RECOMMENDED','Static picket 22:30 + ANPR','gold')+row('MO MATCH','Offender A pattern · 72%','red')+'</div>'
+ +'<div style="margin-top:10px"><button class="btn small red">Accept patrol tasking</button></div></div></div>';
+},
+
+mo: function(){
+ var cards=PERSONS.filter(function(p){return p.flags.length}).map(function(p){
+  return '<div class="card" style="border-color:'+(p.risk>80?'var(--red)':'var(--line)')+'">'
+  +'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div>'
+  +'<div style="font-family:var(--fd);font-size:15px;font-weight:700;color:var(--white)">'+esc(p.name)+'</div>'
+  +'<div style="font-family:var(--fm);font-size:9px;color:var(--mist)">'+p.id+' · '+p.cases+' cases</div></div>'
+  +'<div style="text-align:center"><div style="width:40px;height:40px;border-radius:50%;border:3px solid '+(p.risk>80?'var(--red)':'var(--gold)')+';display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:13px;font-weight:700;color:'+(p.risk>80?'var(--redSoft)':'var(--goldSoft)')+'">'+p.risk+'</div>'
+  +'<div style="font-family:var(--fm);font-size:6.5px;color:var(--mist);margin-top:2px">RISK</div></div></div>'
+  +'<div style="font-size:11.5px;color:var(--mist);margin-top:7px;line-height:1.5"><b style="color:var(--goldSoft)">MO:</b> '+esc(p.mo)+'</div>'
+  +'<div style="font-family:var(--fm);font-size:9px;color:var(--mist);margin-top:4px">Last sighting: '+esc(p.seen)+'</div></div>';
+ }).join('');
+ return '<div class="screen">'+back()+eyebrow('Modus operandi bureau · pattern matching','var(--gold)')+'<h2>MO Offenders</h2>'
+ +'<div class="flexrow" style="margin-bottom:11px;margin-top:0"><span class="tag gold">Chain snatching</span><span class="tag mist">House break-in</span><span class="tag mist">2W theft</span><span class="tag mist">Cyber</span></div>'+cards+'</div>';
+},
+
+point: function(){
+ var pts=['Metro Gate 2','SR Nagar Jn','Bank row','Jewellery lane','Bus stand','Park gate'];
+ var done=S.points.filter(Boolean).length;
+ var list=pts.map(function(p,i){
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;'+(i<5?'border-bottom:1px solid var(--lineSoft)':'')+'">'
+  +'<div style="display:flex;align-items:center;gap:9px">'
+  +'<div style="width:24px;height:24px;border-radius:6px;background:'+(S.points[i]?'rgba(48,164,108,.15)':'var(--bg)')+';border:1px solid '+(S.points[i]?'var(--green)':'var(--line)')+';display:flex;align-items:center;justify-content:center;font-size:11px">'+(S.points[i]?'✓':'📍')+'</div>'
+  +'<div><div style="font-size:12px;color:var(--white)">'+p+'</div>'+(S.points[i]?'<div style="font-family:var(--fm);font-size:8px;color:var(--mist)">QR scanned · GPS verified</div>':'')+'</div></div>'
+  +(!S.points[i]?'<button class="btn small ghost green" style="color:var(--green);border-color:var(--green)" onclick="S.points['+i+']=1;render()">Scan QR</button>':'')+'</div>';
+ }).join('');
+ return '<div class="screen">'+back()+eyebrow('Digital point book · geofenced QR + NFC','var(--green)')+'<h2>Beat Points — Night</h2>'
+ +'<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:9px">'+eyebrow('Progress')
+ +'<span style="font-family:var(--fm);font-size:10px;color:var(--green);font-weight:700">'+done+'/6 VISITED</span></div>'
+ +'<div class="progress"><div class="fill" style="width:'+(done/6*100)+'%"></div></div>'+list+'</div>'
+ +'<div class="mono-note">Spoof-proof: scan valid only inside 30m geofence · supervisor sees live</div></div>';
+},
+
+c1930: function(){
+ var items=[['1930-48812','UPI fraud','₹84,500','FREEZE INITIATED','gold'],['1930-48796','Investment scam','₹4,20,000','AMOUNT HELD','green'],['1930-48771','OTP phishing','₹12,000','BANK NOTIFIED','blue']];
+ return '<div class="screen">'+back()+eyebrow('National cyber helpline · NCRP linked','var(--cyan)')+'<h2>1930 Fraud Desk</h2>'
+ +'<div style="display:flex;gap:8px;margin-bottom:11px">'
+ +'<div class="card" style="flex:1;text-align:center;padding:10px;margin:0"><div style="font-family:var(--fd);font-size:17px;font-weight:700;color:var(--green)">₹5.1L</div><div style="font-family:var(--fm);font-size:7.5px;color:var(--mist)">HELD TODAY</div></div>'
+ +'<div class="card" style="flex:1;text-align:center;padding:10px;margin:0"><div style="font-family:var(--fd);font-size:17px;font-weight:700;color:var(--gold)">41</div><div style="font-family:var(--fm);font-size:7.5px;color:var(--mist)">COMPLAINTS</div></div>'
+ +'<div class="card" style="flex:1;text-align:center;padding:10px;margin:0"><div style="font-family:var(--fd);font-size:17px;font-weight:700;color:var(--cyan)">8 min</div><div style="font-family:var(--fm);font-size:7.5px;color:var(--mist)">AVG FREEZE</div></div></div>'
+ +items.map(function(x){return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div>'
+ +'<div style="font-family:var(--fd);font-size:13.5px;font-weight:700;color:var(--white)">'+x[1]+' · '+x[2]+'</div>'
+ +'<div style="font-family:var(--fm);font-size:9px;color:var(--mist)">'+x[0]+' · golden-hour protocol</div></div>'
+ +'<span class="tag '+x[4]+'">'+x[3]+'</span></div></div>'}).join('')
+ +'<div class="mono-note">Auto bank-API freeze within golden hour · escalates to cyber PS if &gt; ₹1L</div></div>';
+},
+
+hawkeye: function(){
+ var items=[['HE-77104','Women safety','Group loitering near bus stop, Ameerpet','21:18','NEW','red',1],
+  ['HE-77092','Traffic violation','Wrong-side driving, SR Nagar X roads (video)','20:51','ASSIGNED','gold',0],
+  ['HE-77063','Suspicious activity','Abandoned vehicle 3 days, Yousufguda','19:34','RESOLVED','green',0]];
+ return '<div class="screen">'+back()+eyebrow('Citizen reporting app · two-way channel','var(--violet)')+'<h2>Hawk Eye Inbox</h2>'
+ +items.map(function(h){return '<div class="card" style="border-left:3px solid var(--'+h[5]+')">'
+ +'<div style="display:flex;justify-content:space-between"><span class="tag '+h[5]+'">'+h[4]+'</span>'
+ +'<span style="font-family:var(--fm);font-size:9px;color:var(--mist)">'+h[3]+' · '+h[0]+'</span></div>'
+ +'<div style="font-family:var(--fd);font-size:13.5px;font-weight:700;color:var(--white);margin-top:7px">'+h[1]+'</div>'
+ +'<div style="font-size:11.5px;color:var(--mist);margin-top:3px">'+h[2]+'</div>'
+ +(h[6]?'<div class="flexrow"><button class="btn small violet">Accept &amp; respond</button><button class="btn small ghost mist">Reassign</button></div>':'')+'</div>'}).join('')
+ +'<div class="mono-note">Citizen gets live status + officer ETA · anonymous reporting supported · SLA 30 min for women-safety category</div></div>';
+},
+
+traffic: function(){
+ var ch = !S.challanIssued
+  ? '<div class="card">'+eyebrow('Quick e-challan')+'<input value="TG09AB1234">'
+   +'<select><option>No helmet · ₹1,000</option><option>Wrong-side · ₹1,500</option><option>Signal jump · ₹1,000</option><option>Triple riding · ₹1,200</option></select>'
+   +'<div style="margin-top:10px"><button class="btn full" onclick="S.challanIssued=true;render()">Generate challan</button></div></div>'
+  : '<div class="card" style="border-color:var(--green)"><div style="font-family:var(--fd);font-size:15px;color:var(--green);font-weight:700">✓ CHN-TG-2026-771204 issued</div>'
+   +'<div style="font-family:var(--fm);font-size:9.5px;color:var(--mist);margin-top:5px">SMS to owner · evidence photo hashed · synced to IeCS</div>'
+   +'<div style="margin-top:9px"><button class="btn small ghost" onclick="S.challanIssued=false;render()">Issue another</button></div></div>';
+ return '<div class="screen">'+back()+eyebrow('IeCS 2.0 · ANPR · RLVD integrated','var(--gold)')+'<h2>Traffic Enforcement</h2>'
+ +'<div class="card">'+eyebrow('ANPR live — patrol cam')
+ +'<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid rgba(229,72,77,.4)">'
+ +'<div style="font-family:var(--fm);font-size:15px;font-weight:700;color:var(--white);background:rgba(255,255,255,.12);padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.25)">TG10XY7777</div>'
+ +'<div style="flex:1"><span class="tag red">⚠ STOLEN FLAG</span><div style="font-family:var(--fm);font-size:8.5px;color:var(--mist);margin-top:3px">5 pending challans · insurance expired</div></div></div></div>'+ch+'</div>';
+},
+
+tsafe: function(){
+ var js=[['TS-9912','Hitec City → Uppal','Cab · TG07T8821','23 min',64],['TS-9904','Secunderabad Stn → Alwal','Auto · walk segment','11 min',81]];
+ return '<div class="screen">'+back()+eyebrow('Citizen journey monitoring · opt-in','var(--green)')+'<h2>T-Safe Live Journeys</h2>'
+ +js.map(function(j){return '<div class="card"><div style="display:flex;justify-content:space-between">'
+ +'<div style="font-family:var(--fd);font-size:13.5px;font-weight:700;color:var(--white)">'+j[1]+'</div><span class="tag green">● SAFE</span></div>'
+ +'<div style="font-family:var(--fm);font-size:9px;color:var(--mist);margin-top:3px">'+j[0]+' · '+j[2]+' · ETA '+j[3]+'</div>'
+ +'<div class="progress" style="margin:9px 0 4px;height:6px"><div class="fill" style="width:'+j[4]+'%"></div></div>'
+ +'<div style="font-family:var(--fm);font-size:8px;color:var(--mist)">Route deviation &amp; stop-too-long alerts armed · auto-escalates to 112</div></div>'}).join('')
+ +'<div class="card" style="border-color:var(--gold)">'+eyebrow('How it works','var(--gold)')
+ +'<div style="font-size:11px;color:var(--mist);margin-top:6px;line-height:1.6">Citizen shares journey via T-Safe app → live tracking with consent → deviation/SOS auto-creates a 112 incident with last known location pushed to nearest unit (you).</div></div></div>';
+},
+
+sosfeed: function(){
+ return '<div class="screen">'+back()+eyebrow('Unified SOS — citizen apps + officer devices','var(--red)')+'<h2>SOS Feed</h2>'
+ +'<div class="card" style="border-color:var(--red);background:rgba(229,72,77,.05)">'
+ +'<div style="display:flex;justify-content:space-between"><span class="tag red">CITIZEN SOS · LIVE</span><span style="font-family:var(--fm);font-size:9px;color:var(--mist)">21:39 · 0.9 km</span></div>'
+ +'<div style="font-family:var(--fd);font-size:14px;font-weight:700;color:var(--white);margin-top:7px">T-Safe panic trigger — female commuter</div>'
+ +row('SOURCE','T-Safe app · journey TS-9912')+row('LOCATION','Punjagutta flyover underpass','red')+row('AUDIO','10s ambient clip attached')
+ +'<div class="flexrow"><button class="btn small red">Respond — 3 min</button><button class="btn small ghost mist">Patch to 112</button></div></div>'
+ +'<div class="card"><span class="tag green">RESOLVED</span>'
+ +'<div style="font-size:11.5px;color:var(--mist);margin-top:7px">Officer SOS · HC 88231 · backup reached in 4 min · stood down 20:12</div></div></div>';
+},
+
+jail: function(){
+ var rel=[['Demo Offender D','Burglary (3 cases)','Chanchalguda','Releasing 14 Jun','Your beat zone',1],['Demo Offender E','Vehicle theft','Cherlapally','Released 09 Jun','Adj. division',0]];
+ return '<div class="screen">'+back()+eyebrow('e-Prisons integration · auto beat-mapped','var(--red)')+'<h2>Release Alerts</h2>'
+ +rel.map(function(r){return '<div class="card" style="border-color:'+(r[5]?'var(--red)':'var(--line)')+'">'
+ +'<div style="display:flex;justify-content:space-between"><div style="font-family:var(--fd);font-size:14.5px;font-weight:700;color:var(--white)">'+r[0]+'</div>'+(r[5]?'<span class="tag red">YOUR ZONE</span>':'')+'</div>'
+ +'<div style="margin-top:6px">'+row('HISTORY',r[1])+row('FACILITY',r[2])+row('STATUS',r[3],r[5]?'red':'')+row('MAPPED TO',r[4])+'</div>'
+ +(r[5]?'<div class="flexrow"><button class="btn small red">Add to surveillance roster</button><button class="btn small ghost mist">View dossier</button></div>':'')+'</div>'}).join('')
+ +'<div class="mono-note">Auto-alert when a repeat offender with cases in your jurisdiction is released · supports preventive vigilance under due process — no automatic restrictions applied</div></div>';
+},
+
+osint: function(){
+ var vals=[18,24,20,35,52,78,64,41,30,26,44,58];
+ var bars=vals.map(function(v){return '<div class="bar" style="height:'+v+'%;background:'+(v>60?'var(--red)':v>40?'var(--gold)':'var(--blue)')+'"></div>'}).join('');
+ return '<div class="screen">'+back()+eyebrow('Open-source intelligence · public data only','var(--blue)')+'<h2>OSINT Monitor</h2>'
+ +'<div class="card">'+eyebrow('Public-order signals — last 6h','var(--blue)')
+ +'<div class="bars">'+bars+'</div>'
+ +'<div style="display:flex;justify-content:space-between;font-family:var(--fm);font-size:8px;color:var(--mist);margin-top:5px"><span>16:00</span><span>SIGNAL VOLUME</span><span>22:00</span></div></div>'
+ +'<div class="card" style="border-left:3px solid var(--gold)"><span class="tag gold">TRENDING · VERIFY</span>'
+ +'<div style="font-size:11.5px;color:var(--white);margin-top:7px">Viral clip claims gas leak near Ameerpet — geolocation suggests old footage from another state. Fact-check unit notified.</div></div>'
+ +'<div class="card" style="border-left:3px solid var(--blue)"><span class="tag blue">EVENT WATCH</span>'
+ +'<div style="font-size:11.5px;color:var(--white);margin-top:7px">Public rally permitted Sat 18:00, NTR Stadium — expected 2k attendance, bandobast plan auto-drafted.</div></div>'
+ +'<div class="mono-note">Scope limited to publicly posted content &amp; verified tip-lines. No private account access. Misinformation flags route to designated fact-check unit — not field action.</div></div>';
+},
+
+hrms: function(){
+ return '<div class="screen">'+back()+eyebrow('HRMS · e-Office · welfare')+'<h2>My Service</h2>'
+ +'<div class="card">'+row('DUTY','Night beat 18:00–02:00')+row('WEEKLY OFF','Sunday · confirmed','green')
+ +row('CL BALANCE','11 days')+row('PENDING E-FILES','2 — SHO desk','gold')+row('FITCOP SCORE','84 · monthly PET due 20 Jun','cyan')+'</div>'
+ +'<div class="flexrow"><button class="btn small ghost green" style="color:var(--green);border-color:var(--green)">Apply leave</button>'
+ +'<button class="btn small blue">Duty roster</button><button class="btn small ghost mist">Payslip</button></div></div>';
+}
+};
+
+function cctnsSearch(){
+ var q=document.getElementById('cctnsQ').value.toLowerCase();
+ var hit=null;
+ for(var i=0;i<PERSONS.length;i++){ if(PERSONS[i].name.toLowerCase().indexOf(q)>=0||PERSONS[i].id.toLowerCase().indexOf(q)>=0){hit=PERSONS[i];break;} }
+ S.cctnsResult = (q && hit) ? hit : 'none';
+ render();
+ var el=document.getElementById('cctnsQ'); if(el){el.value=q; el.focus();}
+}
+function frsScan(){ S.frsPhase=1; render(); setTimeout(function(){S.frsPhase=2;render()},2200); }
+
+function go(s){ S.screen=s; render(); document.getElementById('content').scrollTop=0; }
+
+function render(){
+ document.getElementById('content').innerHTML = SCREENS[S.screen]();
+ var isApp = S.screen!=='login';
+ document.getElementById('navbar').style.display = isApp?'flex':'none';
+ document.getElementById('sosFab').style.display = isApp?'block':'none';
+ var navs=document.querySelectorAll('.navbtn');
+ for(var i=0;i<navs.length;i++){ navs[i].className='navbtn'+(navs[i].getAttribute('data-nav')===S.screen?' on':''); }
+}
+render();
+</script>
+</body>
+</html>

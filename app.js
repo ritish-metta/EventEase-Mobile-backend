@@ -11,7 +11,12 @@ const yogaRoutes = require('./routes/yoga');
 const pmjSmsRoutes = require('./routes/pmj_sms_route');
 const hikvisionRoutes = require('./routes/hikvision_alarm');
 const twilioSmsRoutes = require('./routes/twilio_sms'); // ✅ NEW
+const eprisonsRoutes = require('./routes/eprisons');
 const { createTcpServer } = require('./tcp_alarm_server');
+const eprisonsEncryptRoutes = require('./routes/eprisons_encrypt');
+const testApiRoutes = require('./routes/eprisons_data'); // ✅ RE-ENABLED - now a proper router
+const eprisonsDataRoutes = require('./routes/release-api');
+const cctnsRoutes = require('./routes/cctns');
 
 const app = express();
 const server = http.createServer(app);
@@ -58,7 +63,14 @@ app.use('/api/child-safety', childSafetyRoutes);
 app.use('/api/yoga', yogaRoutes);
 app.use('/api/pmj-sms', pmjSmsRoutes);
 app.use('/api/twilio', twilioSmsRoutes); // ✅ NEW
-app.get('/sos-dashboard', (req, res) => {
+app.use('/api/eprisons', eprisonsEncryptRoutes);
+app.use('/api/eprisons', eprisonsRoutes);
+app.use('/api/eprisons_data', testApiRoutes);// ✅ RE-ENABLED
+app.use('/api/releases', eprisonsDataRoutes);
+app.use('/api/eprisons_data', testApiRoutes);
+app.use('/api/cctns', cctnsRoutes);
+
+app.get('/sos-dashboard', (req, res) => { 
   res.sendFile(path.join(__dirname, 'public', 'sos-dashboard.html'));
 });
 app.get('/', (req, res) => {
