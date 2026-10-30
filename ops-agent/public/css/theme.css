@@ -1,0 +1,217 @@
+/* ─────────────────────────────────────────────────────────────
+   OpsEdge design layer (loaded after app.css)
+
+   Colour language, one meaning per colour, used everywhere:
+     radium green  → healthy / go      (online, deploy, start, primary)
+     amber         → needs attention   (restart, warnings)
+     coral red     → danger            (down, stop, delete)
+   Each metric keeps one colour on every screen:
+     CPU violet · Memory sky · Disk peach · Swap teal · Network in green / out amber
+   Brand colours: radium green + orange (logo, avatar, glows).
+   Each section has a colour so you always know where you are:
+     Monitor green · Build orange · System sky
+   ───────────────────────────────────────────────────────────── */
+
+:root:not([data-theme="dark"]) {
+  --radium: #9eff1f;
+  --radium-deep: #5fd300;
+  --radium-ink: #0d1a00;
+  --radium-glow: 0 0 0 1px rgba(110, 220, 0, .35), 0 10px 30px -8px rgba(126, 230, 0, .55);
+  --orange: #ff7a1a; --orange-bg: #fff0e3;
+
+  --cpu: #8b5cf6;  --cpu-bg: #f2eeff;
+  --mem: #38b6f5;  --mem-bg: #e8f6fe;
+  --disk: #fb8c3c; --disk-bg: #fff1e7;
+  --swap: #14b8a6; --swap-bg: #e3f8f5;
+  --net-in: #4fd16b; --net-out: #f5b531;
+
+  --sec: #6fdc00; --sec-bg: #efffd9; /* overridden per section below */
+
+  --bg: #f3f6f2;
+  --glass: rgba(255, 255, 255, .72);
+  --glass-2: rgba(255, 255, 255, .55);
+  --glass-line: rgba(255, 255, 255, .9);
+  --blob-1: rgba(158, 255, 31, .38);
+  --blob-2: rgba(20, 184, 166, .22);
+  --blob-3: rgba(255, 122, 26, .20);
+
+  --lime: var(--radium);
+  --ok: #3a9d00;
+  --ok-soft: #ecffd6;
+  --red: #ef4a4a;
+  --red-soft: #ffeceb;
+  --amber: #c27803;
+  --amber-soft: #fff4dc;
+  --lavender: var(--cpu);
+  --lavender-bg: var(--cpu-bg);
+  --blue: var(--mem);
+  --pink: var(--mem);
+  --promo: #0e1110;
+  --promo-ink: #f4f7f2;
+  --surface: rgba(17, 24, 20, .045);
+  --raise: rgba(17, 24, 20, .08);
+  --card: var(--glass);
+  --rail: rgba(10, 13, 11, .92);
+}
+
+[data-theme="dark"] {
+  --radium: #b3ff3a;
+  --radium-deep: #8be000;
+  --radium-ink: #0b1400;
+  --radium-glow: 0 0 0 1px rgba(179, 255, 58, .35), 0 10px 34px -6px rgba(179, 255, 58, .45);
+  --orange: #ff8a33; --orange-bg: rgba(255, 138, 51, .13);
+
+  --cpu: #a78bfa;  --cpu-bg: rgba(167, 139, 250, .12);
+  --mem: #5cc8ff;  --mem-bg: rgba(92, 200, 255, .11);
+  --disk: #ffa25c; --disk-bg: rgba(255, 162, 92, .11);
+  --swap: #2dd4bf; --swap-bg: rgba(45, 212, 191, .11);
+  --net-in: #6be37f; --net-out: #ffc547;
+
+  --bg: #060807;
+  --glass: rgba(20, 24, 22, .66);
+  --glass-2: rgba(20, 24, 22, .5);
+  --glass-line: rgba(255, 255, 255, .07);
+  --blob-1: rgba(179, 255, 58, .14);
+  --blob-2: rgba(45, 212, 191, .10);
+  --blob-3: rgba(255, 138, 51, .10);
+
+  --lime: var(--radium);
+  --ok: #b3ff3a;
+  --ok-soft: rgba(179, 255, 58, .12);
+  --lavender: var(--cpu);
+  --lavender-bg: var(--cpu-bg);
+  --blue: var(--mem);
+  --pink: var(--mem);
+  --promo: #f2f6ef;
+  --promo-ink: #0b0e0c;
+  --surface: rgba(255, 255, 255, .045);
+  --raise: rgba(255, 255, 255, .09);
+  --card: var(--glass);
+  --rail: rgba(4, 6, 5, .85);
+}
+
+/* section colours (set on <body data-section="…">) */
+body[data-section="monitor"] { --sec: var(--radium-deep); --sec-bg: var(--ok-soft); }
+body[data-section="build"]   { --sec: var(--orange); --sec-bg: var(--orange-bg); }
+body[data-section="system"]  { --sec: var(--mem); --sec-bg: var(--mem-bg); }
+[data-theme="dark"] body[data-section="monitor"] { --sec: var(--radium); }
+
+/* ── full-screen layout with soft radium blur ── */
+body { background: var(--bg); }
+body::before {
+  content: ''; position: fixed; inset: -20%; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(38% 36% at 12% 8%, var(--blob-1), transparent 70%),
+    radial-gradient(34% 34% at 92% 6%, var(--blob-2), transparent 70%),
+    radial-gradient(40% 40% at 70% 96%, var(--blob-3), transparent 70%);
+  filter: blur(40px);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+@keyframes drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2%, 2%, 0) scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+
+.frame { margin: 0; height: 100vh; border-radius: 0; box-shadow: none; background: transparent; z-index: 1; }
+.content { background-image: none; padding: 34px clamp(20px, 3.2vw, 56px) 56px; }
+.content > * { max-width: 1760px; margin-left: auto; margin-right: auto; }
+
+/* glass surfaces */
+.card, .proj, .mini, .ide, .usage-card, .soft-card, .chart-inner, .reco-tile, .job, .modal, .palette-box, .search, .search-results, .ctx, .toast, .upload-panel {
+  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+.card, .proj, .mini { background: var(--glass); border: 1px solid var(--glass-line); box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 12px 40px -24px rgba(16, 40, 10, .25); }
+[data-theme="dark"] :is(.card, .proj, .mini) { box-shadow: 0 12px 40px -24px rgba(0, 0, 0, .8); }
+.soft-card { background: var(--glass-2); border: 1px solid var(--glass-line); }
+.chart-inner, .reco-tile { background: var(--glass); border: 1px solid var(--glass-line); }
+.modal, .palette-box, .search, .search-results, .ctx, .toast, .upload-panel { background: var(--glass); }
+[data-theme="light"] .modal, [data-theme="light"] .search-results, [data-theme="light"] .ctx { background: rgba(255, 255, 255, .92); }
+[data-theme="dark"] .modal, [data-theme="dark"] .search-results, [data-theme="dark"] .ctx { background: rgba(18, 21, 19, .94); }
+
+/* ── rail: glass, radium active state ── */
+.rail { background: var(--rail); backdrop-filter: blur(20px); border-right: 1px solid rgba(255, 255, 255, .05); }
+.rail-logo { margin-bottom: 40px; filter: drop-shadow(0 6px 18px rgba(158, 255, 31, .35)); }
+.rail-nav button.active { background: var(--sec); color: #0b0e0c; box-shadow: 0 0 0 4px rgba(255, 255, 255, .06), 0 8px 26px -6px var(--sec); }
+.rail-nav button.active::after { content: ''; position: absolute; left: -16px; top: 18px; bottom: 18px; width: 4px; border-radius: 0 4px 4px 0; background: var(--sec); }
+.rail-avatar { background: linear-gradient(135deg, var(--radium), var(--orange)); color: #0b0e0c; }
+
+/* ── header: eyebrow (section + greeting), title, health ── */
+.eyebrow { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13.5px; color: var(--muted); }
+.eyebrow .sec-chip { display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--sec-bg);
+  color: var(--text); font-weight: 600; font-size: 11.5px; letter-spacing: 1px; text-transform: uppercase; }
+.eyebrow .sec-chip::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--sec); box-shadow: 0 0 10px var(--sec); }
+.page-head h1 b { background: linear-gradient(90deg, var(--text) 55%, color-mix(in srgb, var(--sec) 75%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.health-chip.good { background: var(--ok-soft); color: var(--ok); }
+.health-chip.good::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--radium-deep); box-shadow: 0 0 0 3px rgba(126, 230, 0, .25); animation: pulse 2.2s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(126, 230, 0, 0); } }
+
+/* ── buttons: radium for "go", ink for primary, outline glass ── */
+.b-lime, .b-green { background: var(--radium); color: var(--radium-ink); box-shadow: var(--radium-glow); font-weight: 600; }
+.b-lime:hover, .b-green:hover { filter: brightness(1.05) saturate(1.1); transform: translateY(-1px); }
+.b-outline { background: var(--glass); border-color: rgba(17, 24, 20, .18); backdrop-filter: blur(12px); }
+[data-theme="dark"] .b-outline { border-color: rgba(255, 255, 255, .16); }
+.b-gradient { background: var(--radium); color: var(--radium-ink); box-shadow: var(--radium-glow); font-weight: 600; }
+.b-gradient:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.b-primary, .b-blue { background: #0f1311; color: #f4f7f2; }
+[data-theme="dark"] .b-primary, [data-theme="dark"] .b-blue { background: #f2f6ef; color: #0b0e0c; }
+.switch input:checked + .track { background: var(--radium-deep); }
+.switch input:checked + .track::after { background: #fff; }
+
+/* pill tabs: active = ink with a section-coloured dot */
+.pill-tabs button { background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); }
+.pill-tabs button.active { background: #0f1311; color: #f4f7f2; border-color: transparent; }
+[data-theme="dark"] .pill-tabs button.active { background: #f2f6ef; color: #0b0e0c; }
+.pill-tabs button.active::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sec); box-shadow: 0 0 10px var(--sec); margin-left: 2px; }
+
+/* ── metric colours ── */
+.tint-mem { background: var(--mem-bg); border: 1px solid var(--glass-line); }
+.tint-disk { background: var(--disk-bg); border: 1px solid var(--glass-line); }
+.blocks i { background: var(--mem); }
+.blocks.disk i { background: var(--disk); }
+.blocks i.empty { background: transparent; }
+.blocks i:not(.empty) { box-shadow: 0 6px 16px -10px currentColor; }
+.usage-card .circle-ic { color: var(--metric, var(--text)); }
+.tint-mem .circle-ic { --metric: var(--mem); }
+.tint-disk .circle-ic { --metric: var(--disk); }
+.m-cpu { --metric: var(--cpu); } .m-swap { --metric: var(--swap); } .m-up { --metric: var(--radium-deep); } .m-proj { --metric: var(--text); }
+.mini .circle-ic { color: var(--metric); background: color-mix(in srgb, var(--metric) 14%, transparent); }
+.mini:has(.m-cpu) .bar > div { background: var(--cpu); }
+.mini:has(.m-swap) .bar > div { background: var(--swap); }
+.bar > div { background: var(--radium-deep); }
+.meter .fill { background: var(--radium-deep); }
+.chips .c-a { background: linear-gradient(90deg, var(--cpu) 50%, var(--mem) 50%); }
+.chips .c-b { background: linear-gradient(90deg, var(--net-in) 50%, var(--net-out) 50%); }
+
+/* promo card: radium accent line */
+.promo-card { position: relative; overflow: hidden; }
+.promo-card::before { content: ''; position: absolute; width: 260px; height: 260px; right: -90px; bottom: -120px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(158, 255, 31, .45), transparent 60%), radial-gradient(circle at 75% 70%, rgba(255, 122, 26, .45), transparent 60%); pointer-events: none; }
+[data-theme="dark"] .promo-card::before { background: radial-gradient(circle at 30% 30%, rgba(95, 211, 0, .28), transparent 60%), radial-gradient(circle at 75% 70%, rgba(255, 122, 26, .3), transparent 60%); }
+.promo-card .b-white { position: relative; }
+
+/* status pills follow the colour language */
+.p-green { background: var(--ok-soft); color: var(--ok); }
+.p-green::before { background: var(--radium-deep); box-shadow: 0 0 6px var(--radium); }
+
+/* recommended tiles: soft lift */
+.reco-tile { transition: transform .18s ease, box-shadow .18s ease; }
+.reco-tile:hover { transform: translateY(-4px); box-shadow: 0 18px 40px -22px rgba(16, 40, 10, .45); }
+.proj { transition: transform .18s ease, box-shadow .18s ease; }
+.proj:hover { transform: translateY(-2px); }
+
+/* IDE / editor keep the section accent */
+.code-tab.active::after, .code-tree .node.active::before { background: var(--sec); }
+.code-tree .node.active { background: var(--sec-bg); }
+.ide-main, .ide-side, .code-tabs, .statusbar { backdrop-filter: none; }
+[data-theme="light"] .ide-side, [data-theme="light"] .code-tabs, [data-theme="light"] .statusbar { background: rgba(250, 252, 249, .9); }
+[data-theme="light"] .ide-main { background: #fff; }
+
+/* inputs focus in radium */
+input:focus, select:focus, textarea:focus { border-color: var(--radium-deep); box-shadow: 0 0 0 4px rgba(126, 230, 0, .18); }
+
+@media (max-width: 900px) {
+  .frame { min-height: 100vh; height: auto; }
+  .rail-nav button.active::after { display: none; }
+}
+
+/* orange = build actions (code, terminal, save & restart) */
+.ide-actions .b-orange, .ide-term-head button:hover { color: var(--orange); }
+.b-orange { background: var(--orange-bg); color: var(--orange); }
