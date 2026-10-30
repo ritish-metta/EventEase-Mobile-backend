@@ -1,0 +1,68 @@
+/* ─────────────────────────────────────────────────────────────
+   Code editor workspace: resizable explorer / terminal, terminal
+   tabs, terminal at the bottom or on the right, focus mode.
+   Sizes come from CSS variables set by js/code.js (and are saved).
+   ───────────────────────────────────────────────────────────── */
+
+.ide { --side-w: 280px; --term-h: 280px; --term-w: 560px; }
+.ide-body { grid-template-columns: var(--side-w) minmax(0, 1fr); position: relative; }
+.ide.no-side .ide-body { grid-template-columns: minmax(0, 1fr); }
+.ide.no-side .ide-side { display: none; }
+
+/* drag handles */
+.ide-side { position: relative; }
+.split-v, .split-h { position: absolute; z-index: 6; transition: background .15s; }
+.split-v { top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; }
+.split-h { left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; }
+.split-v:hover, .split-h:hover, .split-v.drag, .split-h.drag { background: color-mix(in srgb, var(--lavender) 55%, transparent); }
+body.resizing, body.resizing * { cursor: inherit !important; user-select: none !important; }
+body.resizing.col { cursor: col-resize !important; }
+body.resizing.row { cursor: row-resize !important; }
+body.resizing iframe, body.resizing .xterm, body.resizing .monaco-editor { pointer-events: none; }
+
+/* terminal panel: bottom (default) */
+.ide-term { position: relative; height: var(--term-h); min-height: 120px; }
+.ide-term.max { height: 72%; }
+.ide-term-body { position: relative; }
+.term-pane { position: absolute; inset: 6px 4px 4px 12px; }
+.term-pane[hidden] { display: none !important; }
+
+/* terminal on the right side, next to the code */
+.ide.term-right .ide-body { grid-template-columns: var(--side-w) minmax(0, 1fr) var(--term-w); }
+.ide.term-right.no-side .ide-body { grid-template-columns: minmax(0, 1fr) var(--term-w); }
+.ide.term-right .ide-term { height: auto; min-height: 0; border-top: 0; border-left: 1px solid var(--line); min-width: 0; }
+.ide.term-right .ide-term.max { height: auto; }
+.ide.term-right .split-h { top: 0; bottom: 0; left: -4px; right: auto; width: 8px; height: auto; cursor: col-resize; }
+
+/* terminal tabs */
+.term-tabs { display: flex; gap: 4px; margin-left: 10px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.term-tab { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px 0 10px; border-radius: 7px; cursor: pointer;
+  font: 12px 'JetBrains Mono', monospace; color: #9aa1ab; background: transparent; white-space: nowrap; }
+.term-tab:hover { background: rgba(255, 255, 255, .06); color: #e5e7eb; }
+.term-tab.active { background: rgba(255, 255, 255, .1); color: #fff; }
+.term-tab .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; }
+.term-tab .dot.off { background: #6b7280; }
+.term-tab .tx { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: #7d848e; }
+.term-tab .tx:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.term-tab .tx .ic { width: 12px; height: 12px; }
+.term-cwd { font: 400 11.5px 'JetBrains Mono', monospace; color: #7d848e; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.ide.term-right .ide-term-head button:not(.icon) { padding: 0 7px; }
+
+/* focus mode: editor + terminal fill the whole browser */
+body.ide-focus .rail, body.ide-focus .page-head, body.ide-focus .pill-tabs, body.ide-focus #tab-code > p { display: none !important; }
+body.ide-focus .content { padding: 0; overflow: hidden; }
+body.ide-focus .ide { position: fixed; inset: 0; z-index: 40; height: 100vh; min-height: 0; border-radius: 0; border: 0; }
+body.ide-focus #focusBtn { background: var(--accent); color: var(--accent-ink); }
+body.ide-focus #focusBtn use { color: inherit; }
+
+.desk-only { display: inline-grid; }
+@media (max-width: 900px) {
+  .desk-only, .split-v, .split-h { display: none !important; }
+  .ide.term-right .ide-body { grid-template-columns: minmax(0, 1fr); }
+  .ide.term-right .ide-term { display: none; }
+}
+
+/* minimized terminal: only the header bar stays, sessions keep running */
+.ide-term.min { height: 37px !important; min-height: 0; }
+.ide-term.min .ide-term-body, .ide-term.min .split-h { display: none; }
+.ide.term-right .ide-term.min { height: auto !important; }

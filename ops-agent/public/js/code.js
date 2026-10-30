@@ -178,6 +178,8 @@
     editor.addCommand(K.Alt | C.KeyZ, () => toggleEditorOpt('wordWrap'));
     editor.addCommand(K.Alt | C.KeyW, () => activeFile && closeCode(activeFile));
     editor.addCommand(K.CtrlCmd | C.Backquote, () => toggleIdeTerminal());
+    editor.addCommand(K.CtrlCmd | C.KeyB, toggleSide);
+    editor.addCommand(K.CtrlCmd | K.Shift | C.Enter, () => toggleFocus());
 
     editor.onDidChangeCursorSelection(updateStatusBar);
     monaco.editor.onDidChangeMarkers(updateStatusBar);
@@ -217,7 +219,7 @@
     editor.setModel(null);
 
     codeRoot = root;
-    if (!$('ideTermPanel').hidden) ideTermNew(root); // terminal follows the project
+    if (!$('ideTermPanel').hidden && !termSessions.some((t) => t.cwd === root)) ideTermNew(root); // new tab for the new project
     localStorage.setItem('opsCodeRoot', $('codeProject').value);
     fileListCache = null;
     $('treeFilter').value = '';
@@ -485,61 +487,125 @@
     uploadMany(await collectDropped(e.dataTransfer), target, afterTreeChange);
   });
 
-  // ── terminal inside the editor, opened in the project folder ──
-  let ideTerm = null, ideFit = null, ideSocket = null, ideTermCwd = null;
+  // ── terminal inside the editor: tabs, each opened in a folder ──
+  const termSessions = []; // { id, term, fit, socket, cwd, el, alive }
+  let activeTermId = null;
+  let termSeq = 0;
+  const activeSession = () => termSessions.find((t) => t.id === activeTermId);
 
   function toggleIdeTerminal(show) {
     const panel = $('ideTermPanel');
     const open = show ?? panel.hidden;
     panel.hidden = !open;
     if (open) {
-      if (!ideSocket || ideTermCwd !== codeRoot) ideTermNew();
-      else setTimeout(() => { ideFit?.fit(); ideTerm?.focus(); }, 30);
+      if (!termSessions.length) ideTermNew();
+      else setTimeout(() => { fitSession(activeSession()); activeSession()?.term.focus(); }, 30);
     }
     setTimeout(() => editor?.layout(), 40);
   }
 
+  function fitSession(s) {
+    if (!s || $('ideTermPanel').hidden || s.el.hidden) return;
+    try {
+      s.fit.fit();
+      s.socket?.emit('resize', { cols: s.term.cols, rows: s.term.rows });
+    } catch { /* not visible yet */ }
+  }
+
+  // New terminal tab (opened in the project folder unless another folder is given).
   function ideTermNew(cwd = codeRoot) {
     if (!cwd) return;
-    ideSocket?.disconnect();
-    if (!ideTerm) {
-      ideTerm = new Terminal({
-        cursorBlink: true, fontSize: 12.5, lineHeight: 1.25, fontFamily: '"JetBrains Mono", Consolas, monospace',
-        theme: { background: '#0f1114', foreground: '#d7dbe0', cursor: '#a9b3f6', selectionBackground: 'rgba(169,179,246,.3)',
-          green: '#9bd62a', blue: '#7dd3fc', magenta: '#c4b5fd', yellow: '#fbbf24', red: '#ff6b6b' },
-      });
-      ideFit = new FitAddon.FitAddon();
-      ideTerm.loadAddon(ideFit);
-      ideTerm.open($('ideTerm'));
-      ideTerm.onData((d) => ideSocket?.emit('input', d));
-      new ResizeObserver(() => {
-        if ($('ideTermPanel').hidden) return;
-        ideFit.fit();
-        ideSocket?.emit('resize', { cols: ideTerm.cols, rows: ideTerm.rows });
-      }).observe($('ideTerm'));
-    }
-    ideTerm.reset();
-    ideFit.fit();
-    ideTermCwd = cwd;
-    $('ideTermCwd').textContent = cwd.replace(/^\/home\/[^/]+/, '~');
-    ideSocket = io('/terminal', { auth: { token: token() }, query: { cols: ideTerm.cols, rows: ideTerm.rows, cwd }, reconnection: false });
-    ideSocket.on('output', (d) => ideTerm.write(d));
-    ideSocket.on('exit', () => ideTerm.write('\r\n\x1b[33m[session ended, click + for a new one]\x1b[0m\r\n'));
-    ideSocket.on('connect_error', (err) => ideTerm.write(`\r\n\x1b[31m${err.message}\x1b[0m\r\n`));
-    ideSocket.on('connect', () => ideTerm.focus());
+    $('ideTermPanel').hidden = false;
+    const el = document.createElement('div');
+    el.className = 'term-pane';
+    $('ideTerm').appendChild(el);
+    const term = new Terminal({
+      cursorBlink: true, fontSize: Math.max(10, prefs.fontSize - 0.5), lineHeight: 1.25, fontFamily: '"JetBrains Mono", Consolas, monospace',
+      scrollback: 5000,
+      theme: { background: '#0f1114', foreground: '#d7dbe0', cursor: '#a9b3f6', selectionBackground: 'rgba(169,179,246,.3)',
+        green: '#9bd62a', blue: '#7dd3fc', magenta: '#c4b5fd', yellow: '#fbbf24', red: '#ff6b6b' },
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(el);
+    const s = { id: ++termSeq, term, fit, socket: null, cwd, el, alive: true };
+    termSessions.push(s);
+    switchSession(s.id);
+
+    s.socket = io('/terminal', { auth: { token: token() }, query: { cols: term.cols, rows: term.rows, cwd }, reconnection: false });
+    term.onData((d) => s.socket.emit('input', d));
+    s.socket.on('output', (d) => term.write(d));
+    s.socket.on('exit', () => {
+      s.alive = false;
+      term.write('\r\n\x1b[33m[session ended: close this tab or open a new one with +]\x1b[0m\r\n');
+      renderTermTabs();
+    });
+    s.socket.on('disconnect', () => { s.alive = false; renderTermTabs(); });
+    s.socket.on('connect_error', (err) => term.write(`\r\n\x1b[31m${err.message}\x1b[0m\r\n`));
+    s.socket.on('connect', () => { fitSession(s); if (s.id === activeTermId) term.focus(); });
+    setTimeout(() => editor?.layout(), 40);
+    return s;
   }
+
+  function switchSession(id) {
+    activeTermId = id;
+    for (const t of termSessions) t.el.hidden = t.id !== id;
+    const s = activeSession();
+    $('ideTermCwd').textContent = s ? s.cwd.replace(/^\/home\/[^/]+/, '~') : '';
+    renderTermTabs();
+    setTimeout(() => { fitSession(s); s?.term.focus(); }, 20);
+  }
+
+  function closeSession(id) {
+    const i = termSessions.findIndex((t) => t.id === id);
+    if (i < 0) return;
+    const [s] = termSessions.splice(i, 1);
+    s.socket?.disconnect();
+    s.term.dispose();
+    s.el.remove();
+    if (!termSessions.length) {
+      activeTermId = null;
+      renderTermTabs();
+      toggleIdeTerminal(false);
+      return;
+    }
+    if (activeTermId === id) switchSession(termSessions[Math.min(i, termSessions.length - 1)].id);
+    else renderTermTabs();
+  }
+
+  function renderTermTabs() {
+    $('termTabs').innerHTML = termSessions.map((t, i) =>
+      `<span class="term-tab ${t.id === activeTermId ? 'active' : ''}" data-id="${t.id}" title="${esc(t.cwd)}">
+        <span class="dot ${t.alive ? '' : 'off'}"></span>${i + 1}·${esc(baseName(t.cwd) || '~')}
+        <span class="tx" data-close="1" title="Close">${ic('x')}</span></span>`).join('');
+  }
+
+  $('termTabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.term-tab');
+    if (!tab) return;
+    if (e.target.closest('[data-close]')) closeSession(Number(tab.dataset.id));
+    else switchSession(Number(tab.dataset.id));
+  });
+
+  // keep the visible terminal sized to its panel
+  new ResizeObserver(() => fitSession(activeSession())).observe($('ideTerm'));
 
   function openIdeTerminalAt(dir) {
     toggleIdeTerminal(true);
-    if (dir !== ideTermCwd) ideRun(`cd '${dir.replace(/'/g, `'\\''`)}'`);
+    const existing = termSessions.find((t) => t.cwd === dir && t.alive);
+    if (existing) switchSession(existing.id);
+    else ideTermNew(dir);
   }
 
-  // Types a command into the project terminal and runs it.
+  // Types a command into the active project terminal and runs it.
   function ideRun(command) {
     toggleIdeTerminal(true);
-    const send = () => { ideSocket.emit('input', command + '\r'); ideTerm.focus(); };
-    if (ideSocket?.connected) send();
-    else ideSocket?.once('connect', () => setTimeout(send, 400));
+    let s = activeSession();
+    if (!s || !s.alive) s = ideTermNew();
+    if (!s) return;
+    const send = () => { s.socket.emit('input', command + '\r'); s.term.focus(); };
+    if (s.socket?.connected) send();
+    else s.socket?.once('connect', () => setTimeout(send, 400));
   }
 
   function ideRestartApp() {
@@ -554,11 +620,111 @@
     projAct(proj.name, 'deploy');
   }
 
-  const ideTermClear = () => ideTerm?.clear();
-  function ideTermMax() {
-    $('ideTermPanel').classList.toggle('max');
-    setTimeout(() => { ideFit?.fit(); editor?.layout(); }, 40);
+  const ideTermClear = () => activeSession()?.term.clear();
+
+  // ▲ / ▼ buttons: change the terminal size in steps (height at the bottom, width on the right)
+  function ideTermSize(step) {
+    const panel = $('ideTermPanel');
+    panel.classList.remove('min', 'max');
+    if (prefs.termPos === 'right') prefs.termW = Math.min(1200, Math.max(300, (prefs.termW || 560) + step * 100));
+    else prefs.termH = Math.min(900, Math.max(120, (prefs.termH || 280) + step * 80));
+    savePrefs();
+    applyLayout();
   }
+
+  // minimize: collapse to the header bar; sessions keep running
+  function ideTermMin() {
+    const panel = $('ideTermPanel');
+    panel.classList.remove('max');
+    panel.classList.toggle('min');
+    setTimeout(() => { editor?.layout(); fitSession(activeSession()); }, 40);
+  }
+
+  function ideTermMax() {
+    $('ideTermPanel').classList.remove('min');
+    $('ideTermPanel').classList.toggle('max');
+    setTimeout(() => { fitSession(activeSession()); editor?.layout(); }, 40);
+  }
+
+  // ── workspace layout: explorer / terminal sizes, terminal position, focus mode ──
+  function applyLayout() {
+    const ide = $('ide');
+    ide.style.setProperty('--side-w', (prefs.sideW || 280) + 'px');
+    ide.style.setProperty('--term-h', (prefs.termH || 280) + 'px');
+    ide.style.setProperty('--term-w', (prefs.termW || 560) + 'px');
+    ide.classList.toggle('no-side', Boolean(prefs.sideHidden));
+    const right = prefs.termPos === 'right';
+    ide.classList.toggle('term-right', right);
+    const panel = $('ideTermPanel');
+    if (right && panel.parentElement !== ide.querySelector('.ide-body')) ide.querySelector('.ide-body').appendChild(panel);
+    if (!right && panel.parentElement !== ide.querySelector('.ide-main')) ide.querySelector('.ide-main').insertBefore(panel, $('statusBar'));
+    setTimeout(() => { editor?.layout(); fitSession(activeSession()); }, 40);
+  }
+
+  function toggleSide() {
+    prefs.sideHidden = !prefs.sideHidden;
+    savePrefs();
+    applyLayout();
+  }
+
+  function toggleTermPos() {
+    prefs.termPos = prefs.termPos === 'right' ? 'bottom' : 'right';
+    savePrefs();
+    applyLayout();
+    toast(`Terminal moved to the ${prefs.termPos === 'right' ? 'right side' : 'bottom'}`, 'ok');
+  }
+
+  // Drag handle: explorer width, terminal height (or width when it's on the right).
+  function makeSplitter(handle, onMove) {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('drag');
+      const vertical = getComputedStyle(handle).cursor === 'col-resize';
+      document.body.classList.add('resizing', vertical ? 'col' : 'row');
+      const move = (ev) => { onMove(ev); applyLayout(); };
+      const up = () => {
+        handle.releasePointerCapture(e.pointerId);
+        handle.classList.remove('drag');
+        document.body.classList.remove('resizing', 'col', 'row');
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        savePrefs();
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+    });
+  }
+
+  makeSplitter($('splitSide'), (ev) => {
+    const left = $('ide').querySelector('.ide-body').getBoundingClientRect().left;
+    prefs.sideW = Math.round(Math.min(560, Math.max(180, ev.clientX - left)));
+  });
+  makeSplitter($('splitTerm'), (ev) => {
+    const body = $('ide').querySelector('.ide-body').getBoundingClientRect();
+    if (prefs.termPos === 'right') prefs.termW = Math.round(Math.min(body.width - 320, Math.max(300, body.right - ev.clientX)));
+    else {
+      const main = $('ide').querySelector('.ide-main').getBoundingClientRect();
+      prefs.termH = Math.round(Math.min(main.height - 140, Math.max(120, main.bottom - 30 - ev.clientY)));
+    }
+  });
+
+  // Focus mode: hide the panel's menus, use the whole (fullscreen) browser for code + terminal.
+  function toggleFocus(on) {
+    const enable = on ?? !document.body.classList.contains('ide-focus');
+    document.body.classList.toggle('ide-focus', enable);
+    $('focusBtn').querySelector('span').textContent = enable ? 'Exit focus' : 'Focus';
+    if (enable && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    if (!enable && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    setTimeout(() => { editor?.layout(); fitSession(activeSession()); }, 80);
+  }
+  // Esc leaves browser fullscreen → leave focus mode with it
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && document.body.classList.contains('ide-focus')) toggleFocus(false);
+  });
+
+  applyLayout();
+
 
   async function treeNew(kind, dir = codeRoot) {
     const name = prompt(kind === 'file' ? `New file in ${relPath(dir) || baseName(dir)}/ (you can type sub/folder/name.js)` : 'New folder name:');
@@ -763,6 +929,8 @@
     prefs.fontSize = Math.min(24, Math.max(10, prefs.fontSize + step));
     savePrefs();
     editor?.updateOptions({ fontSize: prefs.fontSize, lineHeight: Math.round(prefs.fontSize * 1.65) });
+    for (const t of termSessions) { t.term.options.fontSize = Math.max(10, prefs.fontSize - 0.5); }
+    fitSession(activeSession());
   }
 
   function formatCode() {
@@ -980,6 +1148,8 @@
     if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openFindInFiles(); }
     if (mod && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveActiveCode(); }
     if (mod && e.key === '`') { e.preventDefault(); toggleIdeTerminal(); }
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleSide(); }
+    if (mod && e.shiftKey && e.key === 'Enter') { e.preventDefault(); toggleFocus(); }
   });
 
   // ── changes / diff / commit ──────────────
