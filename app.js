@@ -20,7 +20,6 @@ const eprisonsDataRoutes = require('./routes/release-api');
 const cctnsRoutes = require('./routes/cctns');
 const notesRoutes = require('./routes/notes'); // ✅ NEW
 const loadBalancerRoutes = require('./routes/load_balancer');
-const opsRoutes = require('./routes/ops');
 const app = express();
 const server = http.createServer(app);
 
@@ -46,7 +45,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, ngrok-skip-browser-warning, x-ops-token');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, ngrok-skip-browser-warning');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -73,7 +72,6 @@ app.use('/api/eprisons_data', testApiRoutes);
 app.use('/api/cctns', cctnsRoutes);
 app.use('/api/notes', notesRoutes); // ✅ NEW — Redis-cached notes demo
 app.use('/api/load-balancer', loadBalancerRoutes);
-app.use('/api/ops', opsRoutes);
 
 app.get('/sos-dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'sos-dashboard.html'));
@@ -87,9 +85,6 @@ app.get('/sms-alerts', (req, res) => {
 });
 app.get('/load-balancer-dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'load-balancer-dashboard.html'));
-});
-app.get('/ops-dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'ops-dashboard.html'));
 });
 // ✅ NEW — Notes cache dashboard
 app.get('/notes-dashboard', (req, res) => {
