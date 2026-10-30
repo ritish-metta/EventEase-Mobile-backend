@@ -916,6 +916,19 @@
         const text = e.clipboardData?.getData('text') || '';
         if (text) termSocket?.emit('input', text);
       });
+      // Fix copy: Ctrl+C copies selection if text is selected, otherwise sends ^C (SIGINT).
+      // Ctrl+Shift+C always copies regardless of selection.
+      $('terminal').addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.shiftKey) {
+          const sel = term.getSelection();
+          if (sel) { e.preventDefault(); navigator.clipboard.writeText(sel).catch(() => {}); }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+          e.preventDefault();
+          const sel = term.getSelection();
+          if (sel) navigator.clipboard.writeText(sel).catch(() => {});
+        }
+      });
       window.addEventListener('resize', fitTerm);
     }
     term.reset();
