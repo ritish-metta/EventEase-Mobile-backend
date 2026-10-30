@@ -365,11 +365,13 @@
               <div class="statusbar" id="statusBar">
                 <span id="sbBranch"><svg class="ic"><use href="#i-git"/></svg><b>–</b></span>
                 <span id="sbProblems"></span>
+                <span id="sbSaveState" class="save-state"></span>
                 <span class="spacer"></span>
                 <span id="sbCursor"></span>
                 <span id="sbLang"></span>
                 <span>UTF-8</span>
                 <button type="button" onclick="toggleIdeTerminal()" title="Terminal (Ctrl+`)">Terminal</button>
+                <button type="button" onclick="cycleAutoSave()" id="sbAutoSave" title="Auto save: click to switch Off / After delay / On focus change">Auto save: off</button>
                 <button type="button" onclick="toggleEditorOpt('wordWrap')" id="sbWrap" title="Word wrap (Alt+Z)">Wrap</button>
                 <button type="button" onclick="toggleEditorOpt('minimap')" id="sbMinimap" title="Minimap">Minimap</button>
                 <button type="button" onclick="formatCode()" title="Format document (Shift+Alt+F)">Format</button>

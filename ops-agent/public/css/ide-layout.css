@@ -66,3 +66,7 @@ body.ide-focus #focusBtn use { color: inherit; }
 .ide-term.min { height: 37px !important; min-height: 0; }
 .ide-term.min .ide-term-body, .ide-term.min .split-h { display: none; }
 .ide.term-right .ide-term.min { height: auto !important; }
+
+/* auto save status in the status bar */
+.save-state { color: var(--ok); font-weight: 500; }
+#sbAutoSave.on { color: var(--ok); font-weight: 500; }

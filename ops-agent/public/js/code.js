@@ -182,6 +182,8 @@
     editor.addCommand(K.CtrlCmd | K.Shift | C.Enter, () => toggleFocus());
 
     editor.onDidChangeCursorSelection(updateStatusBar);
+    editor.onDidBlurEditorText(() => activeFile && autoSaveNow(activeFile));
+    updateAutoSaveLabel();
     monaco.editor.onDidChangeMarkers(updateStatusBar);
     updateStatusToggles();
 
@@ -798,10 +800,13 @@
       if (r.type !== 'file') return;
       const model = monaco.editor.createModel(r.content, languageFor(filePath));
       openFiles.set(filePath, { model, savedVersion: model.getAlternativeVersionId(), viewState: null });
-      model.onDidChangeContent(() => { renderCodeTabs(); updateStatusBar(); });
+      model.onDidChangeContent(() => { renderCodeTabs(); updateStatusBar(); scheduleAutoSave(filePath); });
     }
     if (noFocus) { renderCodeTabs(); saveSession(); return; }
-    if (activeFile && openFiles.has(activeFile)) openFiles.get(activeFile).viewState = editor.saveViewState();
+    if (activeFile && openFiles.has(activeFile)) {
+      openFiles.get(activeFile).viewState = editor.saveViewState();
+      if (activeFile !== filePath) autoSaveNow(activeFile); // switching files counts as a focus change
+    }
     activeFile = filePath;
     const f = openFiles.get(filePath);
     editor.setModel(f.model);
@@ -940,6 +945,57 @@
   }
 
   // ── save ──────────────────────────────────
+  // ── auto save: off | delay (1 s after typing stops) | focus (leaving the editor / switching files) ──
+  const AUTO_SAVE_MODES = { off: 'off', delay: 'after delay', focus: 'on focus change' };
+  const AUTO_SAVE_DELAY_MS = 1000;
+  const autoSaveTimers = new Map();
+  let autoSaveErrorShown = false;
+
+  function updateAutoSaveLabel() {
+    const mode = prefs.autoSave || 'off';
+    $('sbAutoSave').textContent = `Auto save: ${AUTO_SAVE_MODES[mode]}`;
+    $('sbAutoSave').classList.toggle('on', mode !== 'off');
+  }
+
+  function cycleAutoSave() {
+    const order = ['off', 'delay', 'focus'];
+    prefs.autoSave = order[(order.indexOf(prefs.autoSave || 'off') + 1) % order.length];
+    savePrefs();
+    updateAutoSaveLabel();
+    toast(prefs.autoSave === 'off' ? 'Auto save is off: save with Ctrl+S'
+      : prefs.autoSave === 'delay' ? 'Auto save: 1 second after you stop typing'
+        : 'Auto save: when you leave the editor or switch files', 'ok');
+    if (prefs.autoSave !== 'off' && activeFile) autoSaveNow(activeFile);
+  }
+
+  function scheduleAutoSave(filePath) {
+    if (prefs.autoSave !== 'delay') return;
+    clearTimeout(autoSaveTimers.get(filePath));
+    autoSaveTimers.set(filePath, setTimeout(() => autoSaveNow(filePath), AUTO_SAVE_DELAY_MS));
+  }
+
+  async function autoSaveNow(filePath) {
+    if (!prefs.autoSave || prefs.autoSave === 'off') return;
+    clearTimeout(autoSaveTimers.get(filePath));
+    const f = openFiles.get(filePath);
+    if (!f || !isDirty(f)) return;
+    $('sbSaveState').textContent = 'Saving…';
+    try {
+      await saveCode(filePath);
+      autoSaveErrorShown = false;
+      $('sbSaveState').textContent = 'Saved ✓';
+      setTimeout(() => { if ($('sbSaveState').textContent === 'Saved ✓') $('sbSaveState').textContent = ''; }, 1500);
+      clearTimeout(autoSaveTimers.get('git'));
+      autoSaveTimers.set('git', setTimeout(loadGitStatus, 2000)); // refresh change markers, not on every keystroke
+    } catch (err) {
+      $('sbSaveState').textContent = 'Not saved';
+      if (!autoSaveErrorShown) { toast('Auto save failed: ' + err.message, 'err'); autoSaveErrorShown = true; }
+    }
+  }
+
+  // leaving the browser tab also counts as a focus change
+  window.addEventListener('blur', () => activeFile && autoSaveNow(activeFile));
+
   async function saveCode(filePath) {
     const f = openFiles.get(filePath);
     const version = f.model.getAlternativeVersionId();
