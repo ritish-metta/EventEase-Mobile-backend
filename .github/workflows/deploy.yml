@@ -1,0 +1,53 @@
+name: CI/CD - Deploy to Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Install & check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check
+        run: node --check app.js
+
+  deploy:
+    name: Deploy to instance
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+            cd ${{ secrets.APP_DIR }}
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci --omit=dev
+            if pm2 describe eventease_backend > /dev/null 2>&1; then
+              pm2 reload eventease_backend --update-env
+            else
+              pm2 start app.js -i 1 --name eventease_backend
+            fi
+            pm2 save
