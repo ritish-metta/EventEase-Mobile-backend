@@ -64,7 +64,28 @@
     $('modalFoot').innerHTML = footHtml + '<button type="button" class="b-grey" onclick="closeModal()">Close</button>';
     $('modal').classList.add('show');
   }
-  function closeModal() { $('modal').classList.remove('show'); }
+  function closeModal() {
+    $('modal').classList.remove('show');
+    if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(false); }
+  }
+
+  // In-page confirm (the browser's confirm() would kick the page out of fullscreen).
+  let confirmResolve = null;
+  function askConfirm(message, { ok = 'OK', danger = false, title = 'Please confirm' } = {}) {
+    return new Promise((resolve) => {
+      if (confirmResolve) confirmResolve(false);
+      openModal(title, `<p style="white-space:pre-line;margin:0">${esc(message)}</p>`,
+        `<button type="button" class="${danger ? 'b-red' : 'b-primary'}" id="confirmOk" onclick="answerConfirm(true)">${esc(ok)}</button>`);
+      confirmResolve = resolve;
+      setTimeout(() => $('confirmOk')?.focus(), 30);
+    });
+  }
+  function answerConfirm(value) {
+    const r = confirmResolve;
+    confirmResolve = null;
+    $('modal').classList.remove('show');
+    r?.(value);
+  }
 
   // ── login ───────────────────────────────
   function showLogin(msg = '') {

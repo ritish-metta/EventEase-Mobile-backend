@@ -70,3 +70,10 @@ body.ide-focus #focusBtn use { color: inherit; }
 /* auto save status in the status bar */
 .save-state { color: var(--ok); font-weight: 500; }
 #sbAutoSave.on { color: var(--ok); font-weight: 500; }
+
+/* inline name box in the explorer (new file / folder, rename) */
+.code-tree .node.editing { background: var(--lavender-bg); cursor: default; }
+.tree-input { flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 5px; font: 13px 'Outfit', sans-serif;
+  border: 1px solid var(--lavender); background: var(--card); box-shadow: 0 0 0 3px rgba(169, 179, 246, .25); }
+.tree-input.bad { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.code-tree .node[draggable="true"]:active { cursor: grabbing; }

@@ -210,11 +210,12 @@
   async function setCodeRoot(root) {
     if (root === '~') root = (await api('/files?path=')).path;
     if (codeRoot && codeRoot !== root && [...openFiles.values()].some(isDirty)) {
-      if (!confirm('You have unsaved files. Switch project anyway? (unsaved changes are lost)')) {
+      if (!(await askConfirm('You have unsaved files. Switch project anyway?\nUnsaved changes will be lost.', { ok: 'Switch anyway', danger: true }))) {
         $('codeProject').value = codeRoot;
         return;
       }
     }
+    if (codeRoot !== root) openDirs.clear();
     for (const f of openFiles.values()) f.model.dispose();
     openFiles.clear();
     activeFile = null;
@@ -253,6 +254,7 @@
 
   function collapseTree() {
     $('treeFilter').value = '';
+    openDirs.clear();
     refreshTree();
   }
 
@@ -270,8 +272,19 @@
       + fileIcon(name, type) + `<span class="label">${esc(name)}</span>`
       + (mark ? `<span class="gitmark">${mark === 'U' ? 'U' : mark}</span>` : '');
     node.addEventListener('contextmenu', (e) => { e.preventDefault(); treeContext(e, full, type); });
+    // drag a file / folder onto another folder to move it (like VS Code)
+    node.draggable = true;
+    node.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData(MOVE_TYPE, full);
+      e.dataTransfer.effectAllowed = 'move';
+      node.classList.add('cut');
+    });
+    node.addEventListener('dragend', () => node.classList.remove('cut'));
     return node;
   }
+
+  const MOVE_TYPE = 'application/x-ops-path';
+  const openDirs = new Set(); // folders expanded in the explorer, kept across refreshes
 
   async function renderTreeLevel(dir, container, depth) {
     let r;
@@ -294,14 +307,17 @@
         node.onclick = () => {
           children.hidden = !children.hidden;
           node.classList.toggle('open', !children.hidden);
+          if (children.hidden) openDirs.delete(full); else openDirs.add(full);
           if (!loaded) {
             loaded = true;
             const inner = document.createElement('div');
             children.appendChild(inner);
-            renderTreeLevel(full, inner, depth + 1);
+            node.loading = renderTreeLevel(full, inner, depth + 1);
           }
+          return node.loading;
         };
         container.append(node, children);
+        if (openDirs.has(full)) node.onclick(); // re-open what was open before the refresh
       } else {
         node.onclick = () => openCode(full);
         container.append(node);
@@ -406,10 +422,12 @@
       { icon: 'file-plus', label: 'New file here', run: () => treeNew('file', dir) },
       { icon: 'folder-plus', label: 'New folder here', run: () => treeNew('folder', dir) },
       '-',
-      { icon: 'copy', label: 'Copy', run: () => copyItem(full) },
-      ...(clipboardPath ? [{ icon: 'paste', label: `Paste "${baseName(clipboardPath)}" here`, run: () => pasteInto(dir, afterTreeChange) }] : []),
+      { icon: 'scissors', label: 'Cut (move)', run: () => cutItem(full) },
+      { icon: 'copy', label: 'Copy', run: () => { cutPath = null; copyItem(full); } },
+      ...(cutPath ? [{ icon: 'paste', label: `Move "${baseName(cutPath)}" here`, run: () => moveItem(cutPath, dir) }]
+        : clipboardPath ? [{ icon: 'paste', label: `Paste "${baseName(clipboardPath)}" here`, run: () => pasteInto(dir, afterTreeChange) }] : []),
       { icon: 'layers', label: 'Duplicate', run: () => duplicateItem(full) },
-      { icon: 'edit', label: 'Rename…', run: () => treeRename(full) },
+      { icon: 'edit', label: 'Rename', run: () => treeRename(full) },
       '-',
       { icon: 'map', label: 'Copy path', run: () => copyPath(full) },
       { icon: 'map', label: 'Copy relative path', run: () => copyPath(relPath(full)) },
@@ -430,7 +448,8 @@
     showCtx(e, [
       { icon: 'file-plus', label: 'New file', run: () => treeNew('file') },
       { icon: 'folder-plus', label: 'New folder', run: () => treeNew('folder') },
-      ...(clipboardPath ? [{ icon: 'paste', label: `Paste "${baseName(clipboardPath)}"`, run: () => pasteInto(codeRoot, afterTreeChange) }] : []),
+      ...(cutPath ? [{ icon: 'paste', label: `Move "${baseName(cutPath)}" here`, run: () => moveItem(cutPath, codeRoot) }]
+        : clipboardPath ? [{ icon: 'paste', label: `Paste "${baseName(clipboardPath)}"`, run: () => pasteInto(codeRoot, afterTreeChange) }] : []),
       { icon: 'upload', label: 'Upload a folder…', run: () => pickFolderInto(codeRoot) },
       { icon: 'download', label: 'Download project', run: downloadProject },
       { icon: 'refresh', label: 'Refresh', run: refreshTree },
@@ -469,8 +488,10 @@
     dropNode?.classList.add('drop');
   };
   $('ideSide').addEventListener('dragover', (e) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
+    const types = e.dataTransfer.types;
+    if (!types.includes('Files') && !types.includes(MOVE_TYPE)) return;
     e.preventDefault();
+    e.dataTransfer.dropEffect = types.includes(MOVE_TYPE) ? 'move' : 'copy';
     const node = e.target.closest('.node[data-type="dir"]');
     setDropNode(node);
     $('codeTree').classList.toggle('drop', !node);
@@ -486,8 +507,101 @@
     setDropNode(null);
     $('codeTree').classList.remove('drop');
     if (!codeRoot) return;
+    const moving = e.dataTransfer.getData(MOVE_TYPE);
+    if (moving) return moveItem(moving, target); // dragged inside the explorer = move
     uploadMany(await collectDropped(e.dataTransfer), target, afterTreeChange);
   });
+
+  // ── move / cut & paste (keeps open tabs and their unsaved edits) ──
+  let cutPath = null;
+  function cutItem(full) {
+    cutPath = full;
+    toast(`Cut ${baseName(full)}: right-click a folder → "Move here"`, 'ok');
+  }
+
+  async function moveItem(from, toDir) {
+    cutPath = null;
+    const target = joinPath(toDir, baseName(from));
+    if (target === from || parentOf(from) === toDir) return; // dropped where it already is
+    if (toDir === from || toDir.startsWith(from + '/')) return toast('A folder cannot be moved into itself', 'err');
+    try {
+      await api('/files/rename', { method: 'POST', body: { from, to: target } });
+      remapOpenFiles(from, target);
+      openDirs.add(toDir);
+      afterTreeChange();
+      toast(`Moved ${baseName(from)} → ${relPath(toDir) || baseName(codeRoot)}/`, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // After a rename / move: point open tabs at the new path instead of closing them.
+  function remapOpenFiles(oldPath, newPath) {
+    const moved = (p) => p === oldPath || p.startsWith(oldPath + '/');
+    if (![...openFiles.keys()].some(moved)) return;
+    const next = new Map();
+    for (const [p, f] of openFiles) next.set(moved(p) ? newPath + p.slice(oldPath.length) : p, f);
+    openFiles.clear();
+    for (const [p, f] of next) openFiles.set(p, f);
+    if (activeFile && moved(activeFile)) activeFile = newPath + activeFile.slice(oldPath.length);
+    for (const d of [...openDirs]) if (moved(d)) { openDirs.delete(d); openDirs.add(newPath + d.slice(oldPath.length)); }
+    renderCodeTabs();
+    updateCrumbs();
+    saveSession();
+  }
+
+  // ── inline name box in the tree (no browser prompt, so fullscreen stays on) ──
+  function inlineName({ before, container, depth, value = '', kind = 'file', hide }) {
+    return new Promise((resolve) => {
+      const row = document.createElement('div');
+      row.className = 'node editing';
+      row.style.paddingLeft = 10 + depth * 14 + 'px';
+      const iconBox = document.createElement('span');
+      const input = Object.assign(document.createElement('input'), { className: 'tree-input', value, spellcheck: false });
+      input.setAttribute('aria-label', kind === 'dir' ? 'Folder name' : 'File name');
+      const setIcon = () => { iconBox.innerHTML = fileIcon(input.value || (kind === 'dir' ? 'folder' : 'file'), kind); };
+      setIcon();
+      row.append(Object.assign(document.createElement('span'), { style: 'width:14px;flex:none' }), iconBox, input);
+      if (before) before.parentNode.insertBefore(row, before);
+      else container.prepend(row);
+      if (hide) hide.hidden = true;
+
+      let done = false;
+      const finish = (val) => {
+        if (done) return;
+        done = true;
+        row.remove();
+        if (hide) hide.hidden = false;
+        resolve(val);
+      };
+      input.addEventListener('input', () => { setIcon(); input.classList.toggle('bad', /(^|\/)\.\.?(\/|$)/.test(input.value)); });
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); finish(input.value.trim() || null); }
+        if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+      });
+      input.addEventListener('blur', () => finish(input.value.trim() || null)); // like VS Code: clicking away keeps the name
+      row.addEventListener('click', (e) => e.stopPropagation());
+      input.focus();
+      // select the name without its extension, like VS Code
+      const dot = value.lastIndexOf('.');
+      input.setSelectionRange(0, kind === 'file' && dot > 0 ? dot : value.length);
+    });
+  }
+
+  // Where to put the "new file" box: top of that folder in the tree (opening it first).
+  async function newItemSpot(dir) {
+    if (dir === codeRoot || $('treeFilter').value.trim()) {
+      if ($('treeFilter').value.trim()) { $('treeFilter').value = ''; refreshTree(); await new Promise((r) => setTimeout(r, 300)); }
+      return { container: $('codeTree'), depth: 0 };
+    }
+    const node = [...$('codeTree').querySelectorAll('.node[data-type="dir"]')].find((n) => n.dataset.path === dir);
+    if (!node) return { container: $('codeTree'), depth: 0, fallbackDir: codeRoot };
+    if (!node.classList.contains('open')) await node.onclick();
+    else await node.loading;
+    const children = node.nextElementSibling;
+    const inner = children.querySelector(':scope > div');
+    const depth = Math.round((parseFloat(node.style.paddingLeft) - 10) / 14) + 1;
+    return { container: inner || children, depth };
+  }
 
   // ── terminal inside the editor: tabs, each opened in a folder ──
   const termSessions = []; // { id, term, fit, socket, cwd, el, alive }
@@ -616,10 +730,11 @@
     ideRun(`pm2 ${proj.mode === 'cluster' ? 'reload' : 'restart'} ${proj.name} && pm2 save`);
   }
 
-  function ideDeploy() {
+  async function ideDeploy() {
     const proj = currentCodeProject();
     if (!proj) return toast('This folder is not a PM2 project', 'err');
-    projAct(proj.name, 'deploy');
+    const ok = await askConfirm(`Deploy ${proj.name}? Pulls the latest code from git, installs packages and reloads.\nChanges made directly on the server in that folder will be lost.`, { ok: 'Deploy' });
+    if (ok) act(`/projects/${encodeURIComponent(proj.name)}/deploy`).then((r) => r && setTimeout(loadProjects, 2500));
   }
 
   const ideTermClear = () => activeSession()?.term.clear();
@@ -728,40 +843,48 @@
   applyLayout();
 
 
+  // New file / folder: a name box appears inside the tree (type sub/folder/name.js to create folders too).
   async function treeNew(kind, dir = codeRoot) {
-    const name = prompt(kind === 'file' ? `New file in ${relPath(dir) || baseName(dir)}/ (you can type sub/folder/name.js)` : 'New folder name:');
+    if (!codeRoot) return;
+    const spot = await newItemSpot(dir);
+    if (spot.fallbackDir) dir = spot.fallbackDir;
+    const name = await inlineName({ container: spot.container, depth: spot.depth, kind: kind === 'folder' ? 'dir' : 'file' });
     if (!name) return;
+    if (/(^|\/)\.\.?(\/|$)/.test(name)) return toast('Invalid name', 'err');
     const target = joinPath(dir, name.replace(/^\/+/, ''));
     try {
       if (kind === 'file') {
         await api('/files', { method: 'PUT', body: { path: target, content: '' } });
-        refreshTree();
+        if (dir !== codeRoot) openDirs.add(dir);
+        for (let d = parentOf(target); d.length > codeRoot.length; d = parentOf(d)) openDirs.add(d); // show sub-folders typed in the name
+        afterTreeChange();
         openCode(target);
       } else {
         await api('/files/mkdir', { method: 'POST', body: { path: target } });
-        refreshTree();
+        if (dir !== codeRoot) openDirs.add(dir);
+        afterTreeChange();
       }
       toast(`Created ${name}`, 'ok');
-      loadGitStatus();
     } catch (err) { toast(err.message, 'err'); }
   }
 
+  // Rename in place: the item's label turns into a name box.
   async function treeRename(full) {
-    const name = prompt('New name:', baseName(full));
+    const node = [...$('codeTree').querySelectorAll('.node')].find((n) => n.dataset.path === full);
+    const depth = node ? Math.round((parseFloat(node.style.paddingLeft) - 10) / 14) : 0;
+    const name = await inlineName({ before: node, container: $('codeTree'), depth, value: baseName(full), kind: node?.dataset.type || 'file', hide: node });
     if (!name || name === baseName(full)) return;
+    if (name.includes('/')) return toast('Use drag & drop or Cut → Move to move files', 'err');
     const target = joinPath(parentOf(full), name);
-    const wasOpen = openFiles.has(full);
-    if (wasOpen && isDirty(openFiles.get(full)) && !confirm('The file has unsaved changes, which are lost when renaming. Continue?')) return;
     try {
       await api('/files/rename', { method: 'POST', body: { from: full, to: target } });
-      if (wasOpen) { openFiles.get(full).savedVersion = -1; forceClose(full); openCode(target); }
-      refreshTree();
-      loadGitStatus();
+      remapOpenFiles(full, target); // open tabs follow, unsaved edits are kept
+      afterTreeChange();
     } catch (err) { toast(err.message, 'err'); }
   }
 
   async function treeDelete(full, type) {
-    if (!confirm(`Delete ${relPath(full)}${type === 'dir' ? ' and everything inside it' : ''}?\nThis cannot be undone.`)) return;
+    if (!(await askConfirm(`Delete ${relPath(full)}${type === 'dir' ? ' and everything inside it' : ''}?\nThis cannot be undone.`, { ok: 'Delete', danger: true }))) return;
     try {
       await api('/files?path=' + encodeURIComponent(full), { method: 'DELETE' });
       for (const p of [...openFiles.keys()]) if (p === full || p.startsWith(full + '/')) forceClose(p);
@@ -877,9 +1000,9 @@
     saveSession();
   }
 
-  function closeCode(filePath) {
+  async function closeCode(filePath) {
     const f = openFiles.get(filePath);
-    if (f && isDirty(f) && !confirm(`${baseName(filePath)} has unsaved changes. Close anyway?`)) return;
+    if (f && isDirty(f) && !(await askConfirm(`${baseName(filePath)} has unsaved changes. Close it anyway?`, { ok: 'Close without saving', danger: true }))) return;
     forceClose(filePath);
   }
 
@@ -1267,7 +1390,8 @@
   }
 
   async function discardFile(name, file) {
-    if (!confirm(`Throw away your changes to ${file}? It goes back to the last committed version.`)) return;
+    if (!(await askConfirm(`Throw away your changes to ${file}?
+It goes back to the last committed version.`, { ok: 'Discard changes', danger: true }))) { openChanges(); return; }
     const r = await act(`/projects/${encodeURIComponent(name)}/discard`, { file });
     if (!r) return;
     const full = joinPath(projects.find((p) => p.name === name).cwd, file);
