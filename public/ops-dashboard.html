@@ -128,8 +128,9 @@
 </div>
 
 <script>
-  // Same origin when served by the backend (/ops-dashboard); fallback for opening the file directly.
-  const API = (location.protocol.startsWith('http') ? location.origin : 'http://16.171.23.221:5000') + '/api/ops';
+  // Same origin when served by the backend (/ops-dashboard); otherwise (Live Server, file://) call the AWS server.
+  const SERVER = 'http://16.171.23.221:5000';
+  const API = (location.pathname === '/ops-dashboard' ? location.origin : SERVER) + '/api/ops';
 
   const $ = (id) => document.getElementById(id);
   $('token').value = localStorage.getItem('opsToken') || '';
