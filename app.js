@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { connectDB, initializeWebSocket } = require('./config/db');
+//const { connectRedis } = require('./config/redis'); // ✅ NEW
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
 const bookingsRouter = require('./routes/bookings');
@@ -10,14 +11,15 @@ const childSafetyRoutes = require('./routes/childSafety');
 const yogaRoutes = require('./routes/yoga');
 const pmjSmsRoutes = require('./routes/pmj_sms_route');
 const hikvisionRoutes = require('./routes/hikvision_alarm');
-const twilioSmsRoutes = require('./routes/twilio_sms'); // ✅ NEW
+const twilioSmsRoutes = require('./routes/twilio_sms');
 const eprisonsRoutes = require('./routes/eprisons');
 const { createTcpServer } = require('./tcp_alarm_server');
 const eprisonsEncryptRoutes = require('./routes/eprisons_encrypt');
-const testApiRoutes = require('./routes/eprisons_data'); // ✅ RE-ENABLED - now a proper router
+const testApiRoutes = require('./routes/eprisons_data');
 const eprisonsDataRoutes = require('./routes/release-api');
 const cctnsRoutes = require('./routes/cctns');
-
+const notesRoutes = require('./routes/notes'); // ✅ NEW
+const loadBalancerRoutes = require('./routes/load_balancer');
 const app = express();
 const server = http.createServer(app);
 
@@ -36,7 +38,6 @@ app.use('/api/hikvision', (req, res, next) => {
 });
 
 // ✅ Raw body for Twilio webhook — must come BEFORE express.json()
-// Twilio sends application/x-www-form-urlencoded
 app.use('/api/twilio/sms', express.urlencoded({ extended: false }));
 
 app.use(express.json());
@@ -62,26 +63,34 @@ app.use('/api/bookings', bookingsRouter);
 app.use('/api/child-safety', childSafetyRoutes);
 app.use('/api/yoga', yogaRoutes);
 app.use('/api/pmj-sms', pmjSmsRoutes);
-app.use('/api/twilio', twilioSmsRoutes); // ✅ NEW
+app.use('/api/twilio', twilioSmsRoutes);
 app.use('/api/eprisons', eprisonsEncryptRoutes);
 app.use('/api/eprisons', eprisonsRoutes);
-app.use('/api/eprisons_data', testApiRoutes);// ✅ RE-ENABLED
+app.use('/api/eprisons_data', testApiRoutes);
 app.use('/api/releases', eprisonsDataRoutes);
 app.use('/api/eprisons_data', testApiRoutes);
 app.use('/api/cctns', cctnsRoutes);
+app.use('/api/notes', notesRoutes); // ✅ NEW — Redis-cached notes demo
+app.use('/api/load-balancer', loadBalancerRoutes);
 
-app.get('/sos-dashboard', (req, res) => { 
+app.get('/sos-dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'sos-dashboard.html'));
 });
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'child-safety-dashboard.html'));
 });
 
-// ✅ Serve SMS Alert Dashboard
 app.get('/sms-alerts', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'sms-alerts-dashboard.html'));
 });
-
+app.get('/load-balancer-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'load-balancer-dashboard.html'));
+});
+// ✅ NEW — Notes cache dashboard
+app.get('/notes-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'notes-dashboard.html'));
+});
+app.use('/api/releases', require('./routes/photo_copy'));
 app.use('/api/hikvision', hikvisionRoutes);
 
 app.get('/api', (req, res) => {
@@ -91,8 +100,13 @@ app.get('/api', (req, res) => {
     websocket: 'Active',
     endpoints: {
       dashboard: 'GET / (Child Safety Dashboard)',
-      smsDashboard: 'GET /sms-alerts (SMS Alerts Dashboard)', // ✅ NEW
-      twilio: { // ✅ NEW
+      smsDashboard: 'GET /sms-alerts (SMS Alerts Dashboard)',
+      notesDashboard: 'GET /notes-dashboard (Redis Cache Demo)', // ✅ NEW
+      notes: { // ✅ NEW
+        upload: 'POST /api/notes  ← saves text to MongoDB, invalidates cache',
+        list:   'GET  /api/notes  ← reads from Redis cache, falls back to MongoDB',
+      },
+      twilio: {
         webhook:      'POST /api/twilio/sms      ← Twilio calls this (set in Twilio Console)',
         getAlerts:    'GET  /api/twilio/alerts   ← Fetch all SMS alerts',
         markRead:     'PUT  /api/twilio/alerts/:id/read',
@@ -134,7 +148,7 @@ app.get('/api', (req, res) => {
           'batteryUpdate - Real-time battery updates',
           'deviceConnected - Device connection notification',
           'deviceDisconnected - Device connection notification',
-          'sms_alert - Real-time SMS alert from ESIM364 via Twilio', // ✅ NEW
+          'sms_alert - Real-time SMS alert from ESIM364 via Twilio',
         ],
       },
     },
@@ -159,12 +173,14 @@ app.use((req, res) => {
 
 const startServer = async () => {
   await connectDB();
+  //await connectRedis(); // ✅ NEW — must connect before any /api/notes request comes in
 
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`API info available at http://localhost:${PORT}/api`);
-    console.log(`SMS Dashboard: http://localhost:${PORT}/sms-alerts`); // ✅ NEW
-    console.log(`Twilio Webhook URL: https://YOUR_NGROK_OR_DOMAIN/api/twilio/sms`); // ✅ NEW
+    console.log(`SMS Dashboard: http://localhost:${PORT}/sms-alerts`);
+    console.log(`Notes Cache Dashboard: http://localhost:${PORT}/notes-dashboard`); // ✅ NEW
+    console.log(`Twilio Webhook URL: https://YOUR_NGROK_OR_DOMAIN/api/twilio/sms`);
   });
 
   createTcpServer(io);
@@ -178,4 +194,4 @@ process.on('SIGTERM', () => {
     console.log('HTTP server closed');
     process.exit(0);
   });
-});
+});   

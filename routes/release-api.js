@@ -4,11 +4,10 @@ const fs = require('fs');
 const router = express.Router();
 
 // --- 🛑 CONFIGURATION 🛑 ---
-// NOTE: move these three to environment variables before this goes anywhere
-// near a shared repo.
-const USER_ID = "Telanganapolice01";
-const RAW_PASSWORD = "telPolice@036";
-const PRIVATE_KEY = "!gan#*tel)!Pol&^";
+// Credentials live in .env — see .env.example for the required keys.
+const USER_ID = process.env.EPRISONS_USER_ID;
+const RAW_PASSWORD = process.env.EPRISONS_PASSWORD;
+const PRIVATE_KEY = process.env.EPRISONS_PRIVATE_KEY;
 
 // --- HELPER FUNCTIONS ---
 function getDynamicKey() {
