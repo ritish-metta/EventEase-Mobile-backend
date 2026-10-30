@@ -7,3 +7,5 @@ backend/routes/childSafety.js
 eventlistdashboard.html
 hikvision_dashboard.html
 sos-dashboard.html
+# ops-agent runtime data (settings, monitors, audit log)
+ops-agent/data/

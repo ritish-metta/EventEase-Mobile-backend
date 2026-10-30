@@ -54,7 +54,7 @@ const run = (cmd, args, opts = {}) =>
   new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: 20000, maxBuffer: 20 * 1024 * 1024, env: CLEAN_ENV, ...opts }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr?.trim() || err.message));
-      resolve(stdout.trim());
+      resolve(opts.raw ? stdout : stdout.trim()); // raw: keep leading spaces (git porcelain)
     });
   });
 
@@ -71,14 +71,18 @@ const tailFile = (file, lines) => {
   return buf.toString('utf8').split('\n').filter(Boolean).slice(-lines);
 };
 
+// Resolves p (absolute or relative to HOME) and returns it only if it stays inside
+// HOME. Symlinks are followed on the part that exists, so they can't escape HOME.
 const insideHome = (p) => {
-  const resolved = path.resolve(HOME, p);
-  let real = resolved;
-  try {
-    real = fs.realpathSync(resolved); // follow symlinks so they can't escape HOME
-  } catch {
-    real = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
+  let existing = path.resolve(HOME, p);
+  const missing = [];
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) return null;
+    missing.unshift(path.basename(existing));
+    existing = parent;
   }
+  const real = path.join(fs.realpathSync(existing), ...missing);
   return real === HOME || real.startsWith(HOME + path.sep) ? real : null;
 };
 
@@ -254,13 +258,67 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// ── Feature modules (features/*.js) ─────────
+const ctx = {
+  app,
+  run,
+  safeRun,
+  q,
+  tailFile,
+  HttpError,
+  startJob,
+  getProjects,
+  findProject,
+  failures,
+  NAME_RE,
+  AGENT_NAME,
+  CLEAN_ENV,
+  emit: (event, data) => opsNs?.emit(event, data),
+};
+const security = require('./features/security')(ctx);
+app.use('/api', security.auditMiddleware);
+
+const settings = require('./features/settings')(ctx);
+const metrics = require('./features/metrics')(ctx);
+const alerts = require('./features/alerts')(ctx, { metrics, settings });
+require('./features/monitors')(ctx, { alerts });
+require('./features/redis')(ctx);
+require('./features/cron')(ctx);
+
+// Pending Ubuntu updates, cached — apt-check takes a second or two.
+let updatesCache = { at: 0, value: null };
+async function pendingUpdates() {
+  if (Date.now() - updatesCache.at < 30 * 60 * 1000) return updatesCache.value;
+  const value = await new Promise((resolve) => {
+    // apt-check prints "<updates>;<security updates>" on stderr
+    execFile('/usr/lib/update-notifier/apt-check', [], { timeout: 30000 }, (err, stdout, stderr) => {
+      const m = /^(\d+);(\d+)/.exec(String(stderr).trim());
+      resolve(m ? { total: +m[1], security: +m[2] } : null);
+    });
+  });
+  updatesCache = { at: Date.now(), value };
+  return value;
+}
+
+// ── Run a one-off command ───────────────────
+app.post('/api/run', (req, res) => {
+  const command = String(req.body?.command || '').trim();
+  if (!command) throw new HttpError(400, 'command is required');
+  const cwd = req.body?.cwd ? insideHome(req.body.cwd) : HOME;
+  if (!cwd || !fs.existsSync(cwd)) throw new HttpError(400, `Folder must exist inside ${HOME}`);
+  const job = startJob(`$ ${command.length > 60 ? command.slice(0, 57) + '…' : command}`, command, { cwd });
+  res.json({ success: true, message: 'Command started', jobId: job.id });
+});
+
 // ── System ──────────────────────────────────
 app.get('/api/system', async (req, res) => {
-  const [df, ps, ss] = await Promise.all([
+  const [df, ps, ss, updates] = await Promise.all([
     safeRun('df', ['-kP', '/']),
     safeRun('ps', ['-eo', 'pid,user,pcpu,pmem,etime,args', '--sort=-pcpu']),
     safeRun('ss', ['-tlnpH']),
+    pendingUpdates(),
   ]);
+  const mem = metrics.memInfo();
 
   let disk = null;
   if (df) {
@@ -288,8 +346,12 @@ app.get('/api/system', async (req, res) => {
     user: USER,
     cpus: os.cpus().length,
     loadAvg: os.loadavg(),
-    memory: { totalBytes: os.totalmem(), freeBytes: os.freemem() },
+    // "free" = MemAvailable (includes reclaimable cache), not MemFree
+    memory: { totalBytes: mem.totalBytes, freeBytes: mem.availableBytes },
+    swap: { totalBytes: mem.swapTotalBytes, freeBytes: mem.swapFreeBytes },
     disk,
+    updates,
+    rebootRequired: fs.existsSync('/var/run/reboot-required'),
     uptimeSec: Math.round(os.uptime()),
     processes,
     ports,
@@ -359,11 +421,14 @@ app.post('/api/projects/:name/:action', async (req, res) => {
       const branch = await run('git', ['-C', proj.cwd, 'rev-parse', '--abbrev-ref', 'HEAD']).catch(() => {
         throw new HttpError(400, `${proj.cwd} is not a git repository`);
       });
-      job = startJob(`deploy ${name} (${branch})`, [
+      // body.commit = rollback / deploy a specific older version instead of the branch tip
+      const commit = req.body?.commit;
+      if (commit && !/^[0-9a-f]{4,40}$/i.test(commit)) throw new HttpError(400, 'Invalid commit hash');
+      job = startJob(commit ? `rollback ${name} → ${commit}` : `deploy ${name} (${branch})`, [
         'set -e',
         `cd ${q(proj.cwd)}`,
         `git fetch origin ${q(branch)}`,
-        `git reset --hard ${q('origin/' + branch)}`,
+        `git reset --hard ${q(commit || 'origin/' + branch)}`,
         installCmd,
         `pm2 reload ${q(name)}`,
         'pm2 save',
@@ -374,6 +439,33 @@ app.post('/api/projects/:name/:action', async (req, res) => {
     case 'flush':
       job = startJob(`clear logs ${name}`, `pm2 flush ${q(name)}`);
       break;
+    case 'commit': {
+      // Save server-side edits to GitHub so the next deploy doesn't wipe them.
+      // The push then triggers the normal CI/CD deploy.
+      const message = String(req.body?.message || '').trim();
+      if (!message) throw new HttpError(400, 'A commit message is required');
+      const branch = await run('git', ['-C', proj.cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
+      const files = Array.isArray(req.body?.files) && req.body.files.length
+        ? req.body.files.map((f) => q(projectFile(proj, f))).join(' ')
+        : '-A';
+      job = startJob(`commit & push ${name}: ${message.slice(0, 50)}`, [
+        'set -e',
+        `cd ${q(proj.cwd)}`,
+        `git add ${files}`,
+        // nothing staged (e.g. retrying a failed push) → skip straight to the push
+        `git diff --cached --quiet || git -c user.name=${q('Server Control Panel')} -c user.email=${q(`panel@${os.hostname()}`)} commit -m ${q(message)}`,
+        `git push origin ${q(branch)} || { echo; echo "❌ Push failed. The server needs WRITE access to GitHub:"; echo "   1) GitHub repo → Settings → Deploy keys → add ~/.ssh/id_ed25519.pub with 'Allow write access'"; echo "   2) Use the SSH remote:  git remote set-url origin git@github.com:OWNER/REPO.git"; echo "   Your commit is saved on the server; click Commit & push again after fixing access."; exit 1; }`,
+        'echo "✅ Pushed. GitHub Actions will now deploy it."',
+      ].join('\n'), { cwd: proj.cwd });
+      break;
+    }
+    case 'discard': {
+      // Throw away server-side edits to one file (or all tracked files).
+      const file = req.body?.file ? projectFile(proj, req.body.file) : null;
+      job = startJob(`discard changes ${name}${file ? `: ${file}` : ''}`,
+        `cd ${q(proj.cwd)} && git checkout -- ${file ? q(file) : '.'} && git status --short`, { cwd: proj.cwd });
+      break;
+    }
     default:
       throw new HttpError(400, `Unknown action "${action}"`);
   }
@@ -397,7 +489,7 @@ app.get('/api/projects/:name/git', async (req, res) => {
   const [remote, counts, status, log] = await Promise.all([
     safeRun('git', ['-C', cwd, 'remote', 'get-url', 'origin']),
     safeRun('git', ['-C', cwd, 'rev-list', '--left-right', '--count', `HEAD...origin/${branch}`]),
-    safeRun('git', ['-C', cwd, 'status', '--porcelain']),
+    safeRun('git', ['-C', cwd, 'status', '--porcelain'], { raw: true }),
     safeRun('git', ['-C', cwd, 'log', '-15', '--format=%h|%s|%an|%cr']),
   ]);
   const [ahead, behind] = (counts || '0 0').split(/\s+/).map(Number);
@@ -414,6 +506,23 @@ app.get('/api/projects/:name/git', async (req, res) => {
       return { hash, message, author, when };
     }),
   });
+});
+
+// A file inside a project, given relative to the project folder.
+function projectFile(proj, file) {
+  const target = insideHome(path.join(proj.cwd, String(file || '')));
+  if (!target || !(target === proj.cwd || target.startsWith(proj.cwd + path.sep))) {
+    throw new HttpError(400, 'File must be inside the project folder');
+  }
+  return path.relative(proj.cwd, target).split(path.sep).join('/');
+}
+
+// Version of a file in the last commit, for the code editor's diff view.
+app.get('/api/projects/:name/original', async (req, res) => {
+  const proj = await findProject(req.params.name);
+  const rel = projectFile(proj, req.query.file);
+  const content = await run('git', ['-C', proj.cwd, 'show', `HEAD:${rel}`]).catch(() => null);
+  res.json({ success: true, file: rel, exists: content !== null, content: content ?? '' });
 });
 
 app.get('/api/projects/:name/env', async (req, res) => {
@@ -462,6 +571,16 @@ app.post('/api/server/:action', (req, res) => {
     update: ['Update system packages', 'sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y', false],
     'clean-logs': ['Clean logs', 'pm2 flush && sudo journalctl --vacuum-size=100M && df -h /', false],
     'pm2-save': ['Save PM2 process list', 'pm2 save', false],
+    swap: ['Create 2 GB swap', [
+      'if [ -n "$(swapon --show --noheadings)" ]; then echo "Swap is already on:"; swapon --show; exit 0; fi',
+      'set -e',
+      'sudo fallocate -l 2G /swapfile',
+      'sudo chmod 600 /swapfile',
+      'sudo mkswap /swapfile',
+      'sudo swapon /swapfile',
+      "grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab",
+      'free -h',
+    ].join('\n'), false],
   };
   const entry = actions[req.params.action];
   if (!entry) throw new HttpError(400, 'Unknown server action');
@@ -497,6 +616,58 @@ app.get('/api/files', (req, res) => {
   const buf = fs.readFileSync(target);
   if (buf.includes(0)) throw new HttpError(415, 'Binary file — cannot be shown');
   res.json({ success: true, type: 'file', path: target, home: HOME, content: buf.toString('utf8') });
+});
+
+// Deleting or renaming these would lock you out (ssh keys) or kill every app (PM2 state).
+const PROTECTED_DIRS = ['.ssh', '.pm2'].map((d) => path.join(HOME, d));
+const isProtected = (p) => p === HOME || PROTECTED_DIRS.some((d) => p === d || p.startsWith(d + path.sep));
+
+const homePath = (p, what = 'path') => {
+  const target = insideHome(p || '');
+  if (!target) throw new HttpError(403, `The ${what} must be inside ${HOME}`);
+  return target;
+};
+
+app.post('/api/files/mkdir', (req, res) => {
+  const target = homePath(req.body?.path, 'folder');
+  if (fs.existsSync(target)) throw new HttpError(409, 'Already exists');
+  fs.mkdirSync(target, { recursive: true });
+  res.json({ success: true, message: `Created ${target}` });
+});
+
+app.post('/api/files/rename', (req, res) => {
+  const from = homePath(req.body?.from);
+  const to = homePath(req.body?.to);
+  if (!fs.existsSync(from)) throw new HttpError(404, 'Not found');
+  if (isProtected(from)) throw new HttpError(403, `${from} is protected`);
+  if (fs.existsSync(to)) throw new HttpError(409, `${path.basename(to)} already exists`);
+  fs.renameSync(from, to);
+  res.json({ success: true, message: `Renamed to ${path.basename(to)}` });
+});
+
+app.delete('/api/files', (req, res) => {
+  const target = homePath(req.query.path);
+  if (!fs.existsSync(target)) throw new HttpError(404, 'Not found');
+  if (isProtected(target)) throw new HttpError(403, `${target} is protected`);
+  fs.rmSync(target, { recursive: true });
+  res.json({ success: true, message: `Deleted ${path.basename(target)}` });
+});
+
+app.get('/api/files/download', (req, res) => {
+  const target = homePath(req.query.path);
+  if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) throw new HttpError(404, 'File not found');
+  res.download(target);
+});
+
+app.post('/api/files/upload', express.raw({ type: '*/*', limit: '50mb' }), (req, res) => {
+  const name = String(req.query.name || '');
+  if (!name || name.includes('/') || name === '.' || name === '..') throw new HttpError(400, 'Invalid file name');
+  const dir = homePath(req.query.dir, 'folder');
+  const target = homePath(path.join(dir, name));
+  if (fs.existsSync(target) && req.query.overwrite !== '1') throw new HttpError(409, `${name} already exists`);
+  const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0); // empty upload → {} from express.raw
+  fs.writeFileSync(target, data);
+  res.json({ success: true, message: `Uploaded ${name} (${data.length} bytes)` });
 });
 
 app.put('/api/files', (req, res) => {

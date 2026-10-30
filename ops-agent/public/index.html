@@ -101,6 +101,32 @@
   #login .modal { width: min(420px, 100%); }
   .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: #64748b; }
   .dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade80; } .dot.off { background: #ef4444; }
+  .code-wrap { display: grid; grid-template-columns: 270px 1fr; height: calc(100vh - 230px); min-height: 420px;
+               border: 1px solid #334155; border-radius: 10px; overflow: hidden; background: #1e1e1e; }
+  .code-tree { background: #0f172a; border-right: 1px solid #334155; overflow: auto; padding: 6px 0; font-size: 13px; }
+  .code-tree .node { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .code-tree .node:hover { background: #1e293b; }
+  .code-tree .node.active { background: #1e3a5f; }
+  .code-main { display: flex; flex-direction: column; min-width: 0; }
+  .code-tabs { display: flex; overflow-x: auto; background: #0f172a; border-bottom: 1px solid #334155; min-height: 34px; }
+  .code-tab { padding: 7px 12px; font-size: 12.5px; color: #94a3b8; cursor: pointer; white-space: nowrap; border-right: 1px solid #1e293b; display: flex; gap: 8px; align-items: center; }
+  .code-tab.active { background: #1e1e1e; color: #e2e8f0; }
+  .code-tab .x { opacity: .5; } .code-tab .x:hover { opacity: 1; color: #ef4444; }
+  .code-tab .dirty { color: #fbbf24; }
+  #codeEditor { flex: 1; min-height: 0; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .charts canvas { width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 8px; }
+  .chart-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+  .chart-label b { color: #e2e8f0; margin-left: 6px; }
+  .notice { padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
+  .notice.crit { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
+  .notice.warn { background: rgba(251,191,36,.10); border: 1px solid rgba(251,191,36,.4); color: #fde68a; }
+  .notice.info { background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.35); color: #bae6fd; }
+  .spark { display: flex; gap: 2px; align-items: flex-end; height: 26px; margin: 8px 0; }
+  .spark span { flex: 1; min-width: 2px; border-radius: 2px; background: #4ade80; }
+  .spark span.bad { background: #ef4444; }
+  #alertBell.has { color: #ef4444; border-color: #ef4444; }
+  code { background: #0f172a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   .form { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; align-items: center; font-size: 13px; }
 </style>
 </head>
@@ -110,6 +136,7 @@
   <span class="title">🛠️ Server Control Panel</span>
   <span class="host"><span class="dot" id="connDot"></span> <span id="hostInfo">connecting…</span></span>
   <span class="spacer"></span>
+  <button type="button" class="b-ghost" id="alertBell" onclick="openAlerts()" title="Alerts">🔔 <span id="alertCount">0</span></button>
   <label class="muted"><input type="checkbox" id="autoRefresh" checked> Auto refresh</label>
   <button type="button" class="b-ghost" onclick="logout()">Log out</button>
 </header>
@@ -117,28 +144,52 @@
 <nav id="nav">
   <button type="button" data-tab="overview" class="active">📊 Overview</button>
   <button type="button" data-tab="projects">📦 Projects</button>
+  <button type="button" data-tab="code">🧑‍💻 Code</button>
+  <button type="button" data-tab="monitors">🩺 Monitors</button>
   <button type="button" data-tab="terminal">💻 Terminal</button>
   <button type="button" data-tab="logs">📜 Logs</button>
-  <button type="button" data-tab="services">⚙️ Services</button>
   <button type="button" data-tab="files">📁 Files</button>
+  <button type="button" data-tab="services">⚙️ Services</button>
+  <button type="button" data-tab="redis">🗄️ Redis</button>
+  <button type="button" data-tab="cron">⏰ Cron</button>
   <button type="button" data-tab="activity">⏱️ Activity <span class="badge" id="runningBadge" hidden>0</span></button>
+  <button type="button" data-tab="security">🛡️ Security</button>
+  <button type="button" data-tab="settings">🔧 Settings</button>
 </nav>
 
 <main>
   <!-- ── Overview ─────────────────────────── -->
   <section class="tab active" id="tab-overview">
+    <div id="alertBanner"></div>
     <div class="tiles">
       <div class="tile"><div class="label">CPU load</div><div class="value" id="cpuVal">–</div><div class="bar"><div id="cpuBar"></div></div></div>
       <div class="tile"><div class="label">Memory</div><div class="value" id="memVal">–</div><div class="bar"><div id="memBar"></div></div></div>
       <div class="tile"><div class="label">Disk</div><div class="value" id="diskVal">–</div><div class="bar"><div id="diskBar"></div></div></div>
+      <div class="tile"><div class="label">Swap</div><div class="value" id="swapVal">–</div><div class="bar"><div id="swapBar"></div></div></div>
       <div class="tile"><div class="label">Server uptime</div><div class="value" id="upVal">–</div><div class="muted" id="osVal"></div></div>
       <div class="tile"><div class="label">Projects online</div><div class="value" id="projVal">–</div><div class="muted" id="projSub"></div></div>
     </div>
 
     <div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <h3 style="margin:0;flex:1">Live charts</h3>
+        <select id="chartRange" onchange="drawCharts()">
+          <option value="90">Last 15 min</option><option value="360" selected>Last 1 hour</option><option value="720">Last 2 hours</option>
+        </select>
+      </div>
+      <div class="charts">
+        <div><div class="chart-label">CPU % <b id="cpuNow"></b></div><canvas id="cpuChart" height="120"></canvas></div>
+        <div><div class="chart-label">Memory % <b id="memNow"></b></div><canvas id="memChart" height="120"></canvas></div>
+        <div><div class="chart-label">Network <span class="up">⬇ in</span> / <span class="warn">⬆ out</span> <b id="netNow"></b></div><canvas id="netChart" height="120"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>Server actions</h3>
+      <div id="serverNotices"></div>
       <div class="row">
         <button type="button" class="b-blue" onclick="serverAction('pm2-save', 'Save the current PM2 process list (so it comes back after reboot)?')">💾 Save PM2 list</button>
+        <button type="button" class="b-grey" id="swapBtn" onclick="serverAction('swap', 'Create a 2 GB swap file? Gives the server extra memory room so apps do not crash when RAM is full.')">💾 Create 2 GB swap</button>
         <button type="button" class="b-grey" onclick="serverAction('clean-logs', 'Clear all PM2 logs and trim system logs to 100 MB?')">🧹 Clean logs</button>
         <button type="button" class="b-orange" onclick="serverAction('update', 'Install all Ubuntu package updates? This can take several minutes.')">⬆️ Update packages</button>
         <button type="button" class="b-red" onclick="serverAction('reboot', 'REBOOT the whole server? Every app goes down for ~1 minute, then PM2 starts them again.')">🔁 Reboot server</button>
@@ -208,25 +259,164 @@
 
   <!-- ── Files ────────────────────────────── -->
   <section class="tab" id="tab-files">
-    <div class="card">
+    <div class="card" id="filesCard">
+      <div class="row" style="margin-bottom:8px">
+        <button type="button" class="b-grey" id="backBtn" onclick="goBack()" title="Back">⬅ Back</button>
+        <button type="button" class="b-grey" onclick="goUp()" title="Parent folder">⬆ Up</button>
+        <button type="button" class="b-grey" onclick="browse(homeDir)" title="Home folder">🏠 Home</button>
+        <input id="pathInput" style="flex:1;min-width:220px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')browse(this.value)" title="Type a path and press Enter">
+        <button type="button" class="b-grey" onclick="browse(currentDir, false)" title="Refresh">↻</button>
+      </div>
       <div class="row" style="margin-bottom:10px">
         <span class="crumbs" id="crumbs"></span>
         <span style="flex:1"></span>
-        <button type="button" class="b-grey" onclick="newFile()">➕ New file</button>
-        <button type="button" class="b-grey" onclick="browse(currentDir)">↻</button>
+        <input id="fileFilter" placeholder="Filter…" oninput="renderFiles()" style="width:150px">
+        <label class="muted"><input type="checkbox" id="showHidden" onchange="renderFiles()"> Hidden files</label>
+        <button type="button" class="b-grey" onclick="newFile()">📄 New file</button>
+        <button type="button" class="b-grey" onclick="newFolder()">📁 New folder</button>
+        <button type="button" class="b-blue" onclick="$('uploadInput').click()">⬆ Upload</button>
+        <button type="button" class="b-grey" onclick="terminalHere()">💻 Terminal here</button>
+        <input type="file" id="uploadInput" multiple hidden onchange="uploadFiles(this.files); this.value=''">
       </div>
-      <table><thead><tr><th scope="col">Name</th><th scope="col">Size</th><th scope="col">Modified</th></tr></thead>
+      <table><thead><tr><th scope="col">Name</th><th scope="col">Size</th><th scope="col">Modified</th><th scope="col">Actions</th></tr></thead>
         <tbody id="fileTable"></tbody></table>
+      <p class="muted">Tip: drag &amp; drop files onto this box to upload them into the current folder.</p>
     </div>
   </section>
 
   <!-- ── Activity ─────────────────────────── -->
   <section class="tab" id="tab-activity">
     <div class="card">
+      <h3>Run a command</h3>
+      <div class="row">
+        <input id="runCmd" placeholder="e.g. df -h" style="flex:3;min-width:240px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')runCommand()">
+        <input id="runCwd" placeholder="Folder (default: home)" style="flex:1;min-width:160px;font-family:Consolas,monospace">
+        <button type="button" class="b-blue" onclick="runCommand()">▶ Run</button>
+      </div>
+      <div class="row" id="quickCmds" style="margin-top:8px"></div>
+      <p class="muted">For interactive programs (nano, top, prompts) use the Terminal tab instead. Edit the quick buttons in Settings.</p>
+    </div>
+    <div class="card">
       <h3>Activity</h3>
-      <p class="muted">Every action (deploy, restart, updates…) runs here with its live output.</p>
+      <p class="muted">Every action (deploy, restart, updates, commands…) runs here with its live output.</p>
       <div id="jobList"></div>
     </div>
+  </section>
+
+  <!-- ── Code editor ──────────────────────── -->
+  <section class="tab" id="tab-code">
+    <div class="row" style="margin-bottom:10px">
+      <select id="codeProject" onchange="setCodeRoot(this.value)" title="Project to open"></select>
+      <button type="button" class="b-green" onclick="saveActiveCode()" title="Ctrl+S">💾 Save</button>
+      <button type="button" class="b-grey" onclick="saveAllCode()">💾 Save all</button>
+      <button type="button" class="b-orange" onclick="saveAndRestart()">🔁 Save &amp; restart app</button>
+      <button type="button" class="b-blue" onclick="openChanges()">🔀 Changes &amp; commit</button>
+      <button type="button" class="b-ghost" onclick="refreshTree()" title="Reload file tree">↻</button>
+      <span class="muted" id="codeStatus"></span>
+    </div>
+    <div class="code-wrap">
+      <div class="code-tree" id="codeTree"><p class="muted">Loading editor…</p></div>
+      <div class="code-main">
+        <div class="code-tabs" id="codeTabs"></div>
+        <div id="codeEditor"></div>
+      </div>
+    </div>
+    <p class="muted">⚠ Edits saved here change the live server only. The next deploy replaces them with the code from GitHub,
+      so use <b>Changes &amp; commit</b> to push them to GitHub (which also deploys them).</p>
+  </section>
+
+  <!-- ── Monitors ─────────────────────────── -->
+  <section class="tab" id="tab-monitors">
+    <div class="row" style="margin-bottom:14px">
+      <button type="button" class="b-green" onclick="openMonitorForm()">➕ Add monitor</button>
+      <button type="button" class="b-grey" onclick="loadMonitors()">↻ Refresh</button>
+      <span class="muted">Checks a URL on a schedule. With auto-heal, a project that stops answering is restarted for you.</span>
+    </div>
+    <div class="projects" id="monitorList"><p class="muted">Loading…</p></div>
+  </section>
+
+  <!-- ── Redis ────────────────────────────── -->
+  <section class="tab" id="tab-redis">
+    <div class="tiles" id="redisTiles"></div>
+    <div class="card">
+      <div class="row">
+        <input id="redisPattern" value="*" style="flex:1;min-width:200px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')loadRedisKeys()" title="Pattern, e.g. user:* or *session*">
+        <button type="button" class="b-blue" onclick="loadRedisKeys()">🔍 Search keys</button>
+        <button type="button" class="b-green" onclick="openRedisSet()">➕ Set key</button>
+        <button type="button" class="b-red" onclick="flushRedis()">🗑️ Delete ALL keys</button>
+      </div>
+      <table style="margin-top:10px"><thead><tr><th scope="col">Key</th><th scope="col">Type</th><th scope="col">Expires in</th><th scope="col">Actions</th></tr></thead>
+        <tbody id="redisKeys"><tr><td colspan="4" class="muted">Click "Search keys".</td></tr></tbody></table>
+      <p class="muted" id="redisNote"></p>
+    </div>
+  </section>
+
+  <!-- ── Cron ─────────────────────────────── -->
+  <section class="tab" id="tab-cron">
+    <div class="grid">
+      <div class="card">
+        <h3>Scheduled jobs (crontab of <span id="cronUser">this user</span>)</h3>
+        <textarea id="cronText" rows="16" spellcheck="false" placeholder="# minute hour day month weekday  command"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="b-green" onclick="saveCron()">💾 Save crontab</button>
+          <button type="button" class="b-grey" onclick="loadCron()">↻ Reload</button>
+          <span class="muted" id="cronInfo"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Examples, click to add</h3>
+        <div id="cronExamples"></div>
+        <p class="muted">Format: <code>minute hour day-of-month month weekday command</code>. Times are in the server's timezone (UTC on EC2).
+          Send output to a file (<code>&gt;&gt; ~/cron.log 2&gt;&amp;1</code>) so you can read it in Files.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Security ─────────────────────────── -->
+  <section class="tab" id="tab-security">
+    <div class="grid">
+      <div class="card">
+        <h3>Logged in to the server right now (SSH)</h3>
+        <pre class="out" id="secSessions" style="max-height:160px"></pre>
+        <h3 style="margin-top:14px">Recent logins</h3>
+        <pre class="out" id="secLogins" style="max-height:220px"></pre>
+      </div>
+      <div class="card">
+        <h3>Blocked IPs (wrong panel password)</h3>
+        <table><thead><tr><th scope="col">IP</th><th scope="col">Wrong tries</th><th scope="col">Since</th><th scope="col"></th></tr></thead>
+          <tbody id="secLockouts"></tbody></table>
+        <p class="muted">An IP is blocked for 15 minutes after 10 wrong passwords.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Audit log: every change made through this panel</h3>
+      <table><thead><tr><th scope="col">Time</th><th scope="col">IP</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
+        <tbody id="secAudit"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ── Settings ─────────────────────────── -->
+  <section class="tab" id="tab-settings">
+    <div class="grid">
+      <div class="card">
+        <h3>Alert notifications</h3>
+        <p class="muted">Paste a Discord or Slack webhook URL to get a message when something goes down, and again when it's fixed.</p>
+        <input id="setWebhook" placeholder="https://discord.com/api/webhooks/…" style="width:100%">
+        <div class="row" style="margin-top:8px"><button type="button" class="b-grey" onclick="testWebhook()">🔔 Send test alert</button></div>
+        <h3 style="margin-top:16px">Alert when above (%)</h3>
+        <div class="form">
+          <label for="setCpu">CPU (1 min avg)</label><input id="setCpu" type="number" min="10" max="100">
+          <label for="setMem">Memory</label><input id="setMem" type="number" min="10" max="100">
+          <label for="setDisk">Disk</label><input id="setDisk" type="number" min="10" max="100">
+        </div>
+      </div>
+      <div class="card">
+        <h3>Quick commands (Activity tab)</h3>
+        <p class="muted">One per line: <code>Button name | command</code></p>
+        <textarea id="setQuick" rows="12" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <button type="button" class="b-green" onclick="saveSettings()">💾 Save settings</button>
   </section>
 </main>
 
@@ -356,6 +546,14 @@
     if (name === 'files' && !currentDir) browse('');
     if (name === 'logs') fillLogProjects();
     if (name === 'terminal') { if (!termSocket) newTerminal(); else setTimeout(fitTerm, 30); }
+    if (name === 'overview') setTimeout(drawCharts, 30);
+    if (name === 'monitors') loadMonitors();
+    if (name === 'code') initCode();
+    if (name === 'redis') loadRedisInfo();
+    if (name === 'cron') loadCron();
+    if (name === 'security') loadSecurity();
+    if (name === 'settings') loadSettings();
+    if (name === 'activity') renderQuickCmds();
   }
 
   // ── overview ────────────────────────────
@@ -376,6 +574,26 @@
       }
       $('upVal').textContent = fmtDur(s.uptimeSec);
       $('osVal').textContent = s.platform;
+
+      if (s.swap?.totalBytes) {
+        const swapUsed = s.swap.totalBytes - s.swap.freeBytes;
+        $('swapVal').textContent = `${fmtBytes(swapUsed)} / ${fmtBytes(s.swap.totalBytes)}`;
+        setBar('swapBar', (swapUsed / s.swap.totalBytes) * 100);
+        $('swapBtn').hidden = true;
+      } else {
+        $('swapVal').innerHTML = '<span class="warn">none</span>';
+        $('swapBtn').hidden = false;
+      }
+      const notices = [];
+      if (!s.swap?.totalBytes && s.memory.totalBytes < 2 * 1024 ** 3) {
+        notices.push(['warn', '⚠️ No swap and less than 2 GB RAM: if memory fills up, Linux kills your apps. Click "Create 2 GB swap".']);
+      }
+      if (s.rebootRequired) notices.push(['warn', '🔁 Updates were installed that need a reboot to take effect.']);
+      if (s.updates?.total) {
+        notices.push([s.updates.security ? 'warn' : 'info',
+          `⬆️ ${s.updates.total} package update(s) available${s.updates.security ? `, ${s.updates.security} of them security fixes` : ''}.`]);
+      }
+      $('serverNotices').innerHTML = notices.map(([cls, text]) => `<div class="notice ${cls}">${esc(text)}</div>`).join('');
 
       $('procTable').innerHTML = s.processes.map((p) => `<tr>
         <td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}</td><td>${p.mem}</td><td>${esc(p.elapsed)}</td><td title="${esc(p.command)}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:Consolas,monospace">${esc(p.command)}</td>
@@ -440,6 +658,7 @@
             : `<button type="button" class="b-green" onclick="projAct(${n},'start')">Start</button>`}
           <button type="button" class="b-green" onclick="projAct(${n},'deploy')">⬇ Deploy</button>
           ${p.mode === 'cluster' ? `<button type="button" class="b-grey" onclick="scaleProj(${n}, ${total})">Scale</button>` : ''}
+          <button type="button" class="b-blue" onclick="openInCode(${n})">🧑‍💻 Code</button>
           <button type="button" class="b-grey" onclick="openLogs(${n})">Logs</button>
           <button type="button" class="b-grey" onclick="openGit(${n})">Git</button>
           <button type="button" class="b-grey" onclick="openEnv(${n})">.env</button>
@@ -505,7 +724,9 @@
         ${g.changedFiles.length ? `<p class="warn">${g.changedFiles.length} file(s) edited directly on the server (a deploy will overwrite them):</p>
           <pre class="out" style="max-height:140px">${esc(g.changedFiles.join('\n'))}</pre>` : ''}
         <h3 style="margin-top:14px">Recent commits</h3>
-        <table><tbody>${g.commits.map((c) => `<tr><td><b>${esc(c.hash)}</b></td><td>${esc(c.message)}</td><td class="muted">${esc(c.author)}</td><td class="muted">${esc(c.when)}</td></tr>`).join('')}</tbody></table>`;
+        <p class="muted">"Deploy this" rolls the project back (or forward) to that exact version. The next normal deploy or git push brings it back to the latest.</p>
+        <table><tbody>${g.commits.map((c, i) => `<tr><td><b>${esc(c.hash)}</b></td><td>${esc(c.message)}</td><td class="muted">${esc(c.author)}</td><td class="muted">${esc(c.when)}</td>
+          <td>${i === 0 ? '<span class="muted">current</span>' : `<button type="button" class="b-ghost" onclick="rollback(${js(name)}, ${js(c.hash)}, ${js(c.message)})">⏪ Deploy this</button>`}</td></tr>`).join('')}</tbody></table>`;
       $('modalFoot').innerHTML = `<button type="button" class="b-green" onclick="closeModal(); projAct(${js(name)},'deploy')">⬇ Deploy latest</button>` + $('modalFoot').innerHTML;
     } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
   }
@@ -606,45 +827,197 @@
   // ── files ───────────────────────────────
   let currentDir = '';
   let homeDir = '';
+  let dirEntries = [];
+  const dirHistory = []; // folders visited before the current one, for ⬅ Back
+  const joinPath = (dir, name) => dir.replace(/\/$/, '') + '/' + name;
+  const parentOf = (p) => p.slice(0, p.lastIndexOf('/')) || '/';
 
-  async function browse(dirPath) {
+  // Opens a folder (or a file, which opens the editor). remember=false skips history (refresh / back).
+  async function browse(target, remember = true) {
     try {
-      const r = await api('/files?path=' + encodeURIComponent(dirPath));
+      const r = await api('/files?path=' + encodeURIComponent(target));
       if (r.type === 'file') return editFile(r);
+      if (remember && currentDir && currentDir !== r.path) dirHistory.push(currentDir);
       currentDir = r.path;
       homeDir = r.home;
+      dirEntries = r.entries;
+      $('pathInput').value = currentDir;
+      $('backBtn').disabled = !dirHistory.length;
       const rel = currentDir.slice(homeDir.length).split('/').filter(Boolean);
       let acc = homeDir;
-      $('crumbs').innerHTML = `<a onclick="browse(${js(homeDir)})">~</a>` + rel.map((part) => {
+      $('crumbs').innerHTML = `<a onclick="browse(${js(homeDir)})">🏠 ~</a>` + rel.map((part) => {
         acc += '/' + part;
         return ` / <a onclick="browse(${js(acc)})">${esc(part)}</a>`;
       }).join('');
-      const up = currentDir !== homeDir
-        ? `<tr class="file-row" onclick="browse(${js(currentDir.slice(0, currentDir.lastIndexOf('/')))})"><td>⬆ ..</td><td></td><td></td></tr>` : '';
-      $('fileTable').innerHTML = up + r.entries.map((e) => `<tr class="file-row" onclick="browse(${js(currentDir + '/' + e.name)})">
-        <td>${e.type === 'dir' ? '📁' : '📄'} ${esc(e.name)}</td>
-        <td class="muted">${e.type === 'dir' ? '' : fmtBytes(e.size)}</td>
-        <td class="muted">${e.mtime ? new Date(e.mtime).toLocaleString() : ''}</td></tr>`).join('');
-    } catch (err) { toast(err.message, 'err'); }
+      renderFiles();
+    } catch (err) {
+      toast(err.message, 'err');
+      $('pathInput').value = currentDir;
+    }
   }
+
+  function goBack() {
+    if (dirHistory.length) browse(dirHistory.pop(), false);
+  }
+
+  function goUp() {
+    if (currentDir !== homeDir) browse(parentOf(currentDir));
+  }
+
+  function renderFiles() {
+    const f = $('fileFilter').value.toLowerCase();
+    const hidden = $('showHidden').checked;
+    const shown = dirEntries.filter((e) => (hidden || !e.name.startsWith('.')) && (!f || e.name.toLowerCase().includes(f)));
+    const up = currentDir !== homeDir
+      ? `<tr class="file-row" onclick="goUp()"><td colspan="4">⬆ .. (parent folder)</td></tr>` : '';
+    $('fileTable').innerHTML = up + shown.map((e) => {
+      const p = js(joinPath(currentDir, e.name));
+      return `<tr class="file-row">
+        <td onclick="browse(${p})">${e.type === 'dir' ? '📁' : '📄'} ${esc(e.name)}</td>
+        <td class="muted" onclick="browse(${p})">${e.type === 'dir' ? '' : fmtBytes(e.size)}</td>
+        <td class="muted" onclick="browse(${p})">${e.mtime ? new Date(e.mtime).toLocaleString() : ''}</td>
+        <td>
+          ${e.type === 'file' ? `<button type="button" class="b-ghost" onclick="downloadFile(${p})" title="Download">⬇</button>` : ''}
+          <button type="button" class="b-ghost" onclick="renameItem(${p})" title="Rename">✏️</button>
+          <button type="button" class="b-ghost" onclick="copyPath(${p})" title="Copy path">📋</button>
+          <button type="button" class="b-ghost" onclick="deleteItem(${p}, ${e.type === 'dir'})" title="Delete">🗑️</button>
+        </td></tr>`;
+    }).join('') || (up ? '' : '<tr><td colspan="4" class="muted">Empty folder</td></tr>');
+    if (!shown.length && up) $('fileTable').innerHTML += '<tr><td colspan="4" class="muted">Empty folder</td></tr>';
+  }
+
+  // ── editor ──
+  let editorOriginal = '';
 
   function editFile(f) {
-    openModal(f.path.replace(f.home, '~'), `<textarea id="fileText" rows="24" spellcheck="false">${esc(f.content)}</textarea>`,
-      `<button type="button" class="b-green" onclick="saveFile(${js(f.path)})">Save</button>`);
+    editorOriginal = f.content;
+    openModal(f.path.replace(f.home, '~'), `
+      <textarea id="fileText" rows="24" spellcheck="false">${esc(f.content)}</textarea>
+      <div class="muted" id="editorInfo" style="margin-top:6px"></div>`,
+      `<button type="button" class="b-grey" onclick="closeEditor()">⬅ Back to folder</button>
+       <button type="button" class="b-green" onclick="saveFile(${js(f.path)})">💾 Save (Ctrl+S)</button>`);
+    const ta = $('fileText');
+    const info = () => {
+      const changed = ta.value !== editorOriginal;
+      $('editorInfo').innerHTML = `${ta.value.split('\n').length} lines · ${fmtBytes(new Blob([ta.value]).size)}`
+        + (changed ? ' · <span class="warn">● unsaved changes</span>' : '');
+    };
+    ta.addEventListener('input', info);
+    ta.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(f.path, true); }
+      if (e.key === 'Tab') { // insert two spaces instead of leaving the textarea
+        e.preventDefault();
+        const s = ta.selectionStart;
+        ta.setRangeText('  ', s, ta.selectionEnd, 'end');
+        info();
+      }
+    });
+    info();
+    ta.focus();
   }
 
-  async function saveFile(filePath) {
+  function closeEditor() {
+    const ta = $('fileText');
+    if (ta && ta.value !== editorOriginal && !confirm('You have unsaved changes. Close without saving?')) return;
+    closeModal();
+  }
+
+  async function saveFile(filePath, stayOpen = false) {
     try {
-      const r = await api('/files', { method: 'PUT', body: { path: filePath, content: $('fileText').value } });
+      const content = $('fileText').value;
+      const r = await api('/files', { method: 'PUT', body: { path: filePath, content } });
       toast(r.message, 'ok');
-      closeModal();
-      browse(currentDir);
+      editorOriginal = content;
+      $('fileText').dispatchEvent(new Event('input'));
+      if (!stayOpen) closeModal();
+      browse(currentDir, false);
     } catch (err) { toast(err.message, 'err'); }
   }
 
+  // ── file actions ──
   function newFile() {
     const name = prompt('New file name (in this folder):');
-    if (name) editFile({ path: currentDir + '/' + name, home: homeDir, content: '' });
+    if (name) editFile({ path: joinPath(currentDir, name), home: homeDir, content: '' });
+  }
+
+  async function newFolder() {
+    const name = prompt('New folder name:');
+    if (!name) return;
+    try {
+      const r = await api('/files/mkdir', { method: 'POST', body: { path: joinPath(currentDir, name) } });
+      toast(r.message, 'ok');
+      browse(currentDir, false);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function renameItem(p) {
+    const oldName = p.slice(p.lastIndexOf('/') + 1);
+    const name = prompt('New name:', oldName);
+    if (!name || name === oldName) return;
+    try {
+      const r = await api('/files/rename', { method: 'POST', body: { from: p, to: joinPath(parentOf(p), name) } });
+      toast(r.message, 'ok');
+      browse(currentDir, false);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function deleteItem(p, isDir) {
+    const msg = isDir ? `Delete the folder ${p} and EVERYTHING inside it?` : `Delete ${p}?`;
+    if (!confirm(msg + '\nThis cannot be undone.')) return;
+    try {
+      const r = await api('/files?path=' + encodeURIComponent(p), { method: 'DELETE' });
+      toast(r.message, 'ok');
+      browse(currentDir, false);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function downloadFile(p) {
+    try {
+      const res = await fetch('/api/files/download?path=' + encodeURIComponent(p), { headers: { 'x-ops-token': token() } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement('a'), { href: url, download: p.slice(p.lastIndexOf('/') + 1) });
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  function copyPath(p) {
+    navigator.clipboard?.writeText(p).then(() => toast('Copied: ' + p, 'ok'), () => prompt('Copy this path:', p));
+  }
+
+  async function uploadFiles(fileList) {
+    for (const file of fileList) {
+      const send = (overwrite) => fetch(`/api/files/upload?${new URLSearchParams({ dir: currentDir, name: file.name, overwrite: overwrite ? '1' : '0' })}`, {
+        method: 'POST',
+        headers: { 'x-ops-token': token(), 'Content-Type': 'application/octet-stream' },
+        body: file,
+      });
+      try {
+        let res = await send(false);
+        if (res.status === 409 && confirm(`${file.name} already exists here. Replace it?`)) res = await send(true);
+        const data = await res.json().catch(() => ({}));
+        toast(data.message || `HTTP ${res.status}`, res.ok ? 'ok' : 'err');
+      } catch (err) { toast(err.message, 'err'); }
+    }
+    browse(currentDir, false);
+  }
+
+  // drag & drop upload onto the files card
+  $('filesCard').addEventListener('dragover', (e) => { e.preventDefault(); $('filesCard').style.borderColor = '#38bdf8'; });
+  $('filesCard').addEventListener('dragleave', () => { $('filesCard').style.borderColor = ''; });
+  $('filesCard').addEventListener('drop', (e) => {
+    e.preventDefault();
+    $('filesCard').style.borderColor = '';
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  });
+
+  function terminalHere() {
+    const dir = currentDir;
+    showTab('terminal');
+    const send = () => termSocket.emit('input', `cd ${"'" + dir.replace(/'/g, `'\\''`) + "'"}\r`);
+    if (termSocket?.connected) send();
+    else termSocket?.once('connect', () => setTimeout(send, 300));
   }
 
   // ── activity / jobs ─────────────────────
@@ -701,6 +1074,13 @@
       const pre = document.querySelector(`#job-${id} pre`);
       if (pre) { pre.textContent = j.output; pre.scrollTop = pre.scrollHeight; }
     });
+    opsSocket.on('metrics', (s) => {
+      samples.push(s);
+      if (samples.length > 720) samples.shift();
+      if (activeTab === 'overview') drawCharts();
+    });
+    opsSocket.on('alerts', renderAlerts);
+    opsSocket.on('monitor', () => { if (activeTab === 'monitors') loadMonitors(); });
     opsSocket.on('logs:data', (text) => {
       if (!following) return;
       logLines.push(...text.split('\n').filter(Boolean));
@@ -738,6 +1118,651 @@
     termSocket.on('connect_error', (err) => { $('termStatus').innerHTML = `<span class="down">${esc(err.message)}</span>`; });
   }
 
+  // ── code editor (Monaco, the editor inside VS Code) ──
+  const MONACO = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
+  let monacoLoading = null;
+  let editor = null;
+  let codeRoot = '';
+  const openFiles = new Map(); // path -> { model, savedVersion, viewState }
+  let activeFile = null;
+
+  // Loaded only when the Code tab is first opened (it's ~3 MB).
+  function loadMonaco() {
+    if (monacoLoading) return monacoLoading;
+    monacoLoading = new Promise((resolve, reject) => {
+      // Monaco's web workers must come from our origin; this proxy imports them from the CDN.
+      window.MonacoEnvironment = {
+        getWorkerUrl: () => `data:text/javascript;charset=utf-8,${encodeURIComponent(
+          `self.MonacoEnvironment = { baseUrl: '${MONACO}/' }; importScripts('${MONACO}/vs/base/worker/workerMain.js');`)}`,
+      };
+      const s = document.createElement('script');
+      s.src = `${MONACO}/vs/loader.js`;
+      s.onload = () => {
+        window.require.config({ paths: { vs: `${MONACO}/vs` } });
+        window.require(['vs/editor/editor.main'], () => resolve(window.monaco));
+      };
+      s.onerror = () => reject(new Error('Could not load the code editor (no internet on this browser?)'));
+      document.head.appendChild(s);
+    });
+    return monacoLoading;
+  }
+
+  const currentCodeProject = () => projects.find((p) => p.cwd === codeRoot);
+
+  async function initCode() {
+    if (editor) { editor.layout(); return; }
+    if (!projects.length) {
+      try { projects = (await api('/projects')).projects; } catch { /* filled later */ }
+    }
+    try {
+      await loadMonaco();
+    } catch (err) {
+      $('codeTree').innerHTML = `<p class="down" style="padding:8px">${esc(err.message)}</p>`;
+      return;
+    }
+    editor = monaco.editor.create($('codeEditor'), {
+      theme: 'vs-dark', automaticLayout: true, fontSize: 13, minimap: { enabled: true },
+      scrollBeyondLastLine: false, tabSize: 2, model: null,
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveActiveCode);
+
+    const sel = $('codeProject');
+    sel.innerHTML = projects.filter((p) => !p.isAgent).concat(projects.filter((p) => p.isAgent))
+      .map((p) => `<option value="${esc(p.cwd)}">📦 ${esc(p.name)}</option>`).join('')
+      + `<option value="${esc(homeDir || '~')}">🏠 Home folder</option>`;
+    if (pendingCodeProject) sel.value = projects.find((p) => p.name === pendingCodeProject)?.cwd || sel.value;
+    pendingCodeProject = null;
+    setCodeRoot(sel.value);
+  }
+
+  let pendingCodeProject = null;
+  function openInCode(name) {
+    const proj = projects.find((p) => p.name === name);
+    if (editor && proj) {
+      $('codeProject').value = proj.cwd;
+      setCodeRoot(proj.cwd);
+    } else pendingCodeProject = name;
+    showTab('code');
+  }
+
+  async function setCodeRoot(root) {
+    if (root === '~') root = (await api('/files?path=')).path;
+    codeRoot = root;
+    const proj = currentCodeProject();
+    $('codeStatus').textContent = proj ? `${proj.name} · ${root}` : root;
+    refreshTree();
+  }
+
+  function refreshTree() {
+    $('codeTree').innerHTML = '';
+    renderTreeLevel(codeRoot, $('codeTree'), 0);
+  }
+
+  async function renderTreeLevel(dir, container, depth) {
+    let r;
+    try {
+      r = await api('/files?path=' + encodeURIComponent(dir));
+    } catch (err) {
+      container.innerHTML = `<div class="node down">${esc(err.message)}</div>`;
+      return;
+    }
+    const pad = 8 + depth * 14;
+    for (const e of r.entries.filter((x) => x.name !== '.git')) {
+      const full = joinPath(r.path, e.name);
+      const node = document.createElement('div');
+      node.className = 'node';
+      node.style.paddingLeft = pad + 'px';
+      node.title = full;
+      node.dataset.path = full;
+      if (e.type === 'dir') {
+        node.textContent = '▸ 📁 ' + e.name;
+        const children = document.createElement('div');
+        children.hidden = true;
+        let loaded = false;
+        node.onclick = () => {
+          children.hidden = !children.hidden;
+          node.textContent = (children.hidden ? '▸' : '▾') + ' 📁 ' + e.name;
+          if (!loaded) { loaded = true; renderTreeLevel(full, children, depth + 1); }
+        };
+        container.append(node, children);
+      } else {
+        node.textContent = '　 📄 ' + e.name;
+        node.onclick = () => openCode(full);
+        container.append(node);
+      }
+    }
+    markActiveNode();
+  }
+
+  function markActiveNode() {
+    document.querySelectorAll('#codeTree .node').forEach((n) => n.classList.toggle('active', n.dataset.path === activeFile));
+  }
+
+  function languageFor(filePath) {
+    const name = filePath.slice(filePath.lastIndexOf('/') + 1).toLowerCase();
+    if (name === '.env' || name.startsWith('.env.')) return 'ini';
+    if (name === 'dockerfile') return 'dockerfile';
+    const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+    return monaco.languages.getLanguages().find((l) => l.extensions?.includes(ext))?.id || 'plaintext';
+  }
+
+  async function openCode(filePath) {
+    if (!openFiles.has(filePath)) {
+      let r;
+      try {
+        r = await api('/files?path=' + encodeURIComponent(filePath));
+      } catch (err) { return toast(err.message, 'err'); }
+      const model = monaco.editor.createModel(r.content, languageFor(filePath));
+      openFiles.set(filePath, { model, savedVersion: model.getAlternativeVersionId(), viewState: null });
+      model.onDidChangeContent(renderCodeTabs);
+    }
+    if (activeFile && openFiles.has(activeFile)) openFiles.get(activeFile).viewState = editor.saveViewState();
+    activeFile = filePath;
+    const f = openFiles.get(filePath);
+    editor.setModel(f.model);
+    if (f.viewState) editor.restoreViewState(f.viewState);
+    editor.focus();
+    renderCodeTabs();
+    markActiveNode();
+  }
+
+  const isDirty = (f) => f.model.getAlternativeVersionId() !== f.savedVersion;
+
+  function renderCodeTabs() {
+    $('codeTabs').innerHTML = [...openFiles.entries()].map(([p, f]) =>
+      `<div class="code-tab ${p === activeFile ? 'active' : ''}" onclick="openCode(${js(p)})" title="${esc(p)}">
+        ${esc(p.slice(p.lastIndexOf('/') + 1))}${isDirty(f) ? ' <span class="dirty">●</span>' : ''}
+        <span class="x" onclick="event.stopPropagation(); closeCode(${js(p)})">✕</span></div>`).join('');
+  }
+
+  function closeCode(filePath) {
+    const f = openFiles.get(filePath);
+    if (isDirty(f) && !confirm(`${filePath} has unsaved changes. Close anyway?`)) return;
+    f.model.dispose();
+    openFiles.delete(filePath);
+    if (activeFile === filePath) {
+      activeFile = null;
+      const next = [...openFiles.keys()].at(-1);
+      if (next) openCode(next); else editor.setModel(null);
+    }
+    renderCodeTabs();
+    markActiveNode();
+  }
+
+  async function saveCode(filePath) {
+    const f = openFiles.get(filePath);
+    const version = f.model.getAlternativeVersionId();
+    await api('/files', { method: 'PUT', body: { path: filePath, content: f.model.getValue() } });
+    f.savedVersion = version;
+    renderCodeTabs();
+  }
+
+  async function saveActiveCode() {
+    if (!activeFile) return;
+    try {
+      await saveCode(activeFile);
+      toast('Saved ' + activeFile.slice(activeFile.lastIndexOf('/') + 1), 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function saveAllCode() {
+    const dirty = [...openFiles.entries()].filter(([, f]) => isDirty(f)).map(([p]) => p);
+    try {
+      for (const p of dirty) await saveCode(p);
+      toast(dirty.length ? `Saved ${dirty.length} file(s)` : 'Nothing to save', 'ok');
+      return true;
+    } catch (err) { toast(err.message, 'err'); return false; }
+  }
+
+  async function saveAndRestart() {
+    const proj = currentCodeProject();
+    if (!proj) return toast('Pick a project (not the home folder) to restart', 'err');
+    if (!(await saveAllCode())) return;
+    act(`/projects/${encodeURIComponent(proj.name)}/${proj.mode === 'cluster' ? 'reload' : 'restart'}`)
+      .then((r) => r && setTimeout(loadProjects, 2500));
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if ([...openFiles.values()].some(isDirty)) e.preventDefault();
+  });
+
+  // ── changes / diff / commit ──
+  let diffEditor = null;
+
+  async function openChanges() {
+    const proj = currentCodeProject();
+    if (!proj) return toast('Pick a project (not the home folder) to see git changes', 'err');
+    await saveAllCode();
+    openModal(`🔀 Changes in ${proj.name}`, '<p class="muted">Checking…</p>');
+    try {
+      const g = await api(`/projects/${encodeURIComponent(proj.name)}/git`);
+      const files = g.changedFiles.map((line) => {
+        const status = line.slice(0, 2).trim();
+        const file = line.slice(3).split(' -> ').pop().replace(/^"|"$/g, '');
+        return { status, file };
+      });
+      const label = { M: 'modified', A: 'added', D: 'deleted', '??': 'new', R: 'renamed' };
+      const n = js(proj.name);
+      $('modalBody').innerHTML = `
+        <p>Branch <b>${esc(g.branch)}</b>${g.behind ? ` · <span class="warn">${g.behind} newer commit(s) on GitHub</span>` : ''}${g.ahead ? ` · <span class="warn">${g.ahead} commit(s) not pushed yet</span>` : ''}</p>
+        ${files.length ? `<table><tbody>${files.map((f) => `<tr>
+            <td><span class="pill ${f.status === '??' || f.status === 'A' ? 'p-green' : f.status === 'D' ? 'p-red' : 'p-orange'}">${label[f.status] || esc(f.status)}</span></td>
+            <td style="font-family:Consolas,monospace">${esc(f.file)}</td>
+            <td>${f.status !== 'D' ? `<button type="button" class="b-ghost" onclick="showDiff(${n}, ${js(f.file)})">👁 Diff</button>` : ''}
+                ${f.status !== '??' ? `<button type="button" class="b-ghost" onclick="discardFile(${n}, ${js(f.file)})">↩ Discard</button>` : ''}</td></tr>`).join('')}</tbody></table>
+          <div id="diffBox" style="height:0;margin-top:10px"></div>
+          <h3 style="margin-top:14px">Commit &amp; push to GitHub</h3>
+          <div class="row"><input id="commitMsg" placeholder="What did you change?" style="flex:1">
+            <button type="button" class="b-green" onclick="commitChanges(${n})">⬆ Commit &amp; push</button></div>
+          <p class="muted">Pushing to <b>${esc(g.branch)}</b> starts the CI/CD pipeline, which deploys it the normal way.</p>`
+        : `<p class="up">✔ No changes: the server matches the last commit.</p>
+           ${g.ahead ? `<button type="button" class="b-green" onclick="commitChanges(${n}, true)">⬆ Push ${g.ahead} waiting commit(s)</button>` : ''}`}`;
+    } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
+  }
+
+  async function showDiff(name, file) {
+    const proj = projects.find((p) => p.name === name);
+    try {
+      const [orig, cur] = await Promise.all([
+        api(`/projects/${encodeURIComponent(name)}/original?file=${encodeURIComponent(file)}`),
+        api('/files?path=' + encodeURIComponent(joinPath(proj.cwd, file))),
+      ]);
+      const box = $('diffBox');
+      box.style.height = '50vh';
+      diffEditor?.dispose();
+      diffEditor = monaco.editor.createDiffEditor(box, { theme: 'vs-dark', readOnly: true, automaticLayout: true, renderSideBySide: box.clientWidth > 700 });
+      const lang = languageFor(file);
+      diffEditor.setModel({ original: monaco.editor.createModel(orig.content, lang), modified: monaco.editor.createModel(cur.content, lang) });
+      box.scrollIntoView({ behavior: 'smooth' });
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function discardFile(name, file) {
+    if (!confirm(`Throw away your changes to ${file}? It goes back to the last committed version.`)) return;
+    const r = await act(`/projects/${encodeURIComponent(name)}/discard`, { file });
+    if (!r) return;
+    const full = joinPath(projects.find((p) => p.name === name).cwd, file);
+    if (openFiles.has(full)) { openFiles.get(full).savedVersion = -1; closeCode(full); }
+    setTimeout(openChanges, 1500);
+  }
+
+  async function commitChanges(name, pushOnly) {
+    const message = pushOnly ? 'push' : $('commitMsg').value.trim();
+    if (!message) return toast('Write a short commit message first', 'err');
+    const r = await act(`/projects/${encodeURIComponent(name)}/commit`, { message });
+    if (r) { closeModal(); showTab('activity'); }
+  }
+
+  // ── charts ──────────────────────────────
+  let samples = [];
+
+  // Minimal line chart: series = [{ values, color }], fixed or auto max.
+  function drawLine(canvas, series, { max, label }) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w) return;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const c = canvas.getContext('2d');
+    c.scale(dpr, dpr);
+    c.clearRect(0, 0, w, h);
+    const top = max ?? Math.max(1024, ...series.flatMap((s) => s.values)) * 1.15;
+
+    c.strokeStyle = '#1e293b';
+    c.fillStyle = '#64748b';
+    c.font = '10px Segoe UI, Arial';
+    c.lineWidth = 1;
+    for (const f of [0.25, 0.5, 0.75]) {
+      const y = h - f * h;
+      c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+      c.fillText(label(top * f), 4, y - 3);
+    }
+
+    for (const { values, color } of series) {
+      if (values.length < 2) continue;
+      const step = w / (values.length - 1);
+      c.beginPath();
+      values.forEach((v, i) => {
+        const x = i * step, y = h - Math.min(1, v / top) * (h - 4) - 2;
+        i ? c.lineTo(x, y) : c.moveTo(x, y);
+      });
+      c.strokeStyle = color;
+      c.lineWidth = 1.6;
+      c.stroke();
+      c.lineTo(w, h); c.lineTo(0, h); c.closePath();
+      c.fillStyle = color + '22';
+      c.fill();
+    }
+  }
+
+  function drawCharts() {
+    if (activeTab !== 'overview') return;
+    const data = samples.slice(-Number($('chartRange').value));
+    const pct = (v) => v.toFixed(0) + '%';
+    const rate = (v) => fmtBytes(v) + '/s';
+    drawLine($('cpuChart'), [{ values: data.map((s) => s.cpu), color: '#38bdf8' }], { max: 100, label: pct });
+    drawLine($('memChart'), [{ values: data.map((s) => s.mem), color: '#a78bfa' }], { max: 100, label: pct });
+    drawLine($('netChart'), [{ values: data.map((s) => s.rx), color: '#4ade80' }, { values: data.map((s) => s.tx), color: '#fbbf24' }], { label: rate });
+    const last = samples.at(-1);
+    if (last) {
+      $('cpuNow').textContent = last.cpu + '%';
+      $('memNow').textContent = last.mem + '%';
+      $('netNow').textContent = `⬇ ${rate(last.rx)} ⬆ ${rate(last.tx)}`;
+    }
+  }
+
+  // ── alerts ──────────────────────────────
+  let activeAlerts = [];
+
+  function renderAlerts(list) {
+    activeAlerts = list;
+    $('alertCount').textContent = list.length;
+    $('alertBell').classList.toggle('has', list.length > 0);
+    $('alertBanner').innerHTML = list.map((a) =>
+      `<div class="notice ${a.level === 'critical' ? 'crit' : 'warn'}">${a.level === 'critical' ? '🚨' : '⚠️'} ${esc(a.message)}
+        <span class="muted">since ${new Date(a.since).toLocaleTimeString()}</span></div>`).join('');
+  }
+
+  async function openAlerts() {
+    openModal('🔔 Alerts', '<p class="muted">Loading…</p>');
+    try {
+      const r = await api('/alerts');
+      $('modalBody').innerHTML = `
+        <h3>Active now</h3>
+        ${r.active.length ? r.active.map((a) => `<div class="notice ${a.level === 'critical' ? 'crit' : 'warn'}">${esc(a.message)}
+          <span class="muted">since ${new Date(a.since).toLocaleString()}</span></div>`).join('') : '<p class="up">✔ Everything is fine.</p>'}
+        <h3 style="margin-top:14px">History</h3>
+        <table><tbody>${r.history.map((h) => `<tr><td class="muted">${new Date(h.at).toLocaleString()}</td>
+          <td>${h.event === 'raised' ? '<span class="pill p-red">raised</span>' : '<span class="pill p-green">resolved</span>'}</td>
+          <td>${esc(h.message)}</td></tr>`).join('') || '<tr><td class="muted">No alerts yet.</td></tr>'}</tbody></table>
+        <p class="muted">Set a Discord/Slack webhook and thresholds in Settings.</p>`;
+    } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
+  }
+
+  // ── rollback ────────────────────────────
+  function rollback(name, hash, message) {
+    closeModal();
+    act(`/projects/${encodeURIComponent(name)}/deploy`, { commit: hash },
+      `Roll ${name} back to ${hash} ("${message}")?\nThe code on the server is replaced with that version, packages reinstalled and the app reloaded.`)
+      .then((r) => r && setTimeout(loadProjects, 3000));
+  }
+
+  // ── monitors ────────────────────────────
+  let monitorsData = [];
+
+  async function loadMonitors() {
+    try {
+      monitorsData = (await api('/monitors')).monitors;
+    } catch (err) {
+      $('monitorList').innerHTML = `<p class="down">${esc(err.message)}</p>`;
+      return;
+    }
+    $('monitorList').innerHTML = monitorsData.map((m) => {
+      const up = m.last?.ok;
+      const status = !m.last ? '<span class="pill p-grey">waiting</span>'
+        : up ? '<span class="pill p-green">UP</span>' : '<span class="pill p-red">DOWN</span>';
+      const maxMs = Math.max(100, ...m.history.map((h) => h.ms));
+      const id = js(m.id);
+      return `<div class="proj">
+        <div class="head"><span class="name">${esc(m.name)}</span>${status}
+          ${m.autoRestart ? `<span class="pill p-grey">auto-heal → ${esc(m.project)}</span>` : ''}</div>
+        <div class="meta">🔗 ${esc(m.url)} · every ${m.intervalSec}s · down after ${m.failThreshold} fails</div>
+        <div class="spark" title="Last checks (height = response time, red = failed)">${m.history.map((h) =>
+          `<span class="${h.ok ? '' : 'bad'}" style="height:${h.ok ? Math.max(8, (h.ms / maxMs) * 100) : 100}%" title="${new Date(h.t).toLocaleTimeString()} · ${h.ok ? h.ms + ' ms' : esc(h.error || 'HTTP ' + h.status)}"></span>`).join('')}</div>
+        <div class="stats">
+          <div>Uptime<b>${m.uptimePct ?? '–'}${m.uptimePct != null ? '%' : ''}</b></div>
+          <div>Avg response<b>${m.avgMs != null ? m.avgMs + ' ms' : '–'}</b></div>
+          <div>Last<b>${m.last ? (m.last.ok ? m.last.ms + ' ms' : esc(m.last.error || 'HTTP ' + m.last.status)) : '–'}</b></div>
+          <div>Fails in a row<b>${m.fails}</b></div>
+        </div>
+        ${m.lastHeal ? `<div class="muted">Last auto-heal restart: ${new Date(m.lastHeal).toLocaleString()}</div>` : ''}
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="b-blue" onclick="checkMonitor(${id})">▶ Check now</button>
+          <button type="button" class="b-grey" onclick="openMonitorForm(${id})">✏️ Edit</button>
+          <button type="button" class="b-ghost" onclick="deleteMonitor(${id})">🗑️ Delete</button>
+        </div></div>`;
+    }).join('') || '<p class="muted">No monitors yet. Click "Add monitor".</p>';
+  }
+
+  function openMonitorForm(id) {
+    const m = monitorsData.find((x) => x.id === id) || { name: '', url: 'http://localhost:', intervalSec: 30, timeoutMs: 5000, failThreshold: 3, project: '', autoRestart: false };
+    const options = ['<option value="">(none)</option>', ...projects.map((p) => `<option ${p.name === m.project ? 'selected' : ''}>${esc(p.name)}</option>`)].join('');
+    openModal(id ? `Edit monitor: ${m.name}` : 'Add monitor', `
+      <div class="form">
+        <label for="mName">Name</label><input id="mName" value="${esc(m.name)}" placeholder="My API">
+        <label for="mUrl">URL</label><input id="mUrl" value="${esc(m.url)}" placeholder="http://localhost:5000/api">
+        <label for="mInterval">Check every (s)</label><input id="mInterval" type="number" min="10" max="3600" value="${m.intervalSec}">
+        <label for="mTimeout">Timeout (ms)</label><input id="mTimeout" type="number" min="1000" max="30000" value="${m.timeoutMs}">
+        <label for="mFails">Down after N fails</label><input id="mFails" type="number" min="1" max="10" value="${m.failThreshold}">
+        <label for="mProject">Project</label><select id="mProject">${options}</select>
+        <label for="mHeal">Auto-heal</label><span><input type="checkbox" id="mHeal" ${m.autoRestart ? 'checked' : ''}> restart the project when it goes down (max once per 5 min)</span>
+      </div>
+      <p class="muted">Use localhost URLs for apps on this server (e.g. http://localhost:5000/api). Any public URL works too.</p>`,
+      `<button type="button" class="b-green" onclick="saveMonitor(${js(id || '')})">💾 Save</button>`);
+  }
+
+  async function saveMonitor(id) {
+    const body = {
+      name: $('mName').value, url: $('mUrl').value, intervalSec: +$('mInterval').value, timeoutMs: +$('mTimeout').value,
+      failThreshold: +$('mFails').value, project: $('mProject').value, autoRestart: $('mHeal').checked,
+    };
+    try {
+      const r = await api(id ? `/monitors/${id}` : '/monitors', { method: id ? 'PUT' : 'POST', body });
+      toast(r.message, 'ok');
+      closeModal();
+      setTimeout(loadMonitors, 2500);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function checkMonitor(id) {
+    try {
+      const r = await api(`/monitors/${id}/check`, { method: 'POST' });
+      toast(r.message, r.result.ok ? 'ok' : 'err');
+      loadMonitors();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function deleteMonitor(id) {
+    const m = monitorsData.find((x) => x.id === id);
+    if (!confirm(`Delete monitor "${m?.name}"?`)) return;
+    try {
+      toast((await api(`/monitors/${id}`, { method: 'DELETE' })).message, 'ok');
+      loadMonitors();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ── redis ───────────────────────────────
+  async function loadRedisInfo() {
+    try {
+      const r = await api('/redis/info');
+      const tile = (label, value) => `<div class="tile"><div class="label">${label}</div><div class="value">${esc(value ?? '–')}</div></div>`;
+      $('redisTiles').innerHTML = tile('Keys', r.keys) + tile('Memory used', r.memory) + tile('Ops / sec', r.opsPerSec)
+        + tile('Cache hit rate', r.hitRate != null ? r.hitRate + '%' : '–') + tile('Clients', r.clients)
+        + tile('Version · uptime', `${r.version} · ${fmtDur(r.uptimeSec)}`);
+    } catch (err) {
+      $('redisTiles').innerHTML = `<div class="notice crit">${esc(err.message)}. Check the Services tab: is redis-server running?</div>`;
+    }
+  }
+
+  const fmtTtl = (t) => (t === -1 ? 'never' : t === -2 ? 'expired' : fmtDur(t));
+
+  async function loadRedisKeys() {
+    try {
+      const r = await api('/redis/keys?pattern=' + encodeURIComponent($('redisPattern').value || '*'));
+      $('redisKeys').innerHTML = r.keys.map((k) => `<tr>
+        <td style="font-family:Consolas,monospace;word-break:break-all">${esc(k.key)}</td>
+        <td><span class="pill p-grey">${esc(k.type)}</span></td><td class="muted">${fmtTtl(k.ttl)}</td>
+        <td><button type="button" class="b-ghost" onclick="viewRedisKey(${js(k.key)})">👁 View</button>
+            <button type="button" class="b-ghost" onclick="deleteRedisKey(${js(k.key)})">🗑️</button></td></tr>`).join('')
+        || '<tr><td colspan="4" class="muted">No keys match.</td></tr>';
+      $('redisNote').textContent = r.truncated ? 'Showing the first 300 matches. Narrow the pattern to see more.' : `${r.keys.length} key(s)`;
+      loadRedisInfo();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function viewRedisKey(key) {
+    try {
+      const r = await api('/redis/key?key=' + encodeURIComponent(key));
+      let pretty = r.value;
+      if (typeof pretty === 'string') {
+        try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch { /* not JSON */ }
+      } else pretty = JSON.stringify(pretty, null, 2);
+      openModal(`🗄️ ${key}`, `<p class="muted">Type <b>${esc(r.type)}</b> · size ${esc(r.size ?? '–')} · expires: ${fmtTtl(r.ttl)}</p>
+        <pre class="out" style="max-height:60vh">${esc(pretty)}</pre>`,
+        `<button type="button" class="b-red" onclick="deleteRedisKey(${js(key)}, true)">🗑️ Delete</button>`);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function deleteRedisKey(key, fromModal) {
+    if (!confirm(`Delete Redis key "${key}"?`)) return;
+    try {
+      toast((await api('/redis/key?key=' + encodeURIComponent(key), { method: 'DELETE' })).message, 'ok');
+      if (fromModal) closeModal();
+      loadRedisKeys();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  function openRedisSet() {
+    openModal('Set a Redis key (string)', `
+      <div class="form">
+        <label for="rkKey">Key</label><input id="rkKey">
+        <label for="rkTtl">Expires in (s)</label><input id="rkTtl" type="number" min="0" placeholder="0 = never">
+      </div>
+      <p class="muted" style="margin-top:10px">Value</p><textarea id="rkVal" rows="8" spellcheck="false"></textarea>`,
+      '<button type="button" class="b-green" onclick="saveRedisKey()">💾 Save</button>');
+  }
+
+  async function saveRedisKey() {
+    try {
+      const r = await api('/redis/key', { method: 'POST', body: { key: $('rkKey').value, value: $('rkVal').value, ttl: +$('rkTtl').value || 0 } });
+      toast(r.message, 'ok');
+      closeModal();
+      loadRedisKeys();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function flushRedis() {
+    if (!confirm('Delete ALL keys in Redis? Caches will rebuild, but anything only stored in Redis is gone.')) return;
+    if (prompt('Type DELETE to confirm') !== 'DELETE') return;
+    try {
+      toast((await api('/redis/flushdb', { method: 'POST' })).message, 'ok');
+      loadRedisKeys();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ── cron ────────────────────────────────
+  const CRON_EXAMPLES = [
+    ['Every 5 minutes: ping the API', '*/5 * * * * curl -s http://localhost:5000/api > /dev/null'],
+    ['Every night 02:00 UTC: clean PM2 logs', '0 2 * * * pm2 flush'],
+    ['Every Sunday 03:00 UTC: backup .env', '0 3 * * 0 cp ~/eventease_backend/.env ~/env-backup-$(date +\\%F).env'],
+    ['Every day 04:00 UTC: delete files older than 7 days in ~/tmp', '0 4 * * * find ~/tmp -type f -mtime +7 -delete'],
+    ['On every reboot: write a line to a log', '@reboot echo "rebooted $(date)" >> ~/reboots.log'],
+  ];
+
+  async function loadCron() {
+    try {
+      const r = await api('/cron');
+      $('cronText').value = r.content;
+      $('cronInfo').textContent = `${r.jobCount} active job(s)`;
+      $('cronUser').textContent = $('hostInfo').textContent.split(' · ')[1] || 'this user';
+      $('cronExamples').innerHTML = CRON_EXAMPLES.map(([title, line]) =>
+        `<div class="notice info" style="cursor:pointer" onclick="addCronLine(${js('# ' + title + '\n' + line)})">
+          <b>${esc(title)}</b><br><code>${esc(line)}</code></div>`).join('');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  function addCronLine(text) {
+    const ta = $('cronText');
+    ta.value = (ta.value.trim() ? ta.value.replace(/\n*$/, '\n\n') : '') + text + '\n';
+    toast('Added. Click "Save crontab" to apply.', 'ok');
+  }
+
+  async function saveCron() {
+    try {
+      toast((await api('/cron', { method: 'PUT', body: { content: $('cronText').value } })).message, 'ok');
+      loadCron();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ── security ────────────────────────────
+  async function loadSecurity() {
+    try {
+      const r = await api('/security');
+      $('secSessions').textContent = r.sessions || '(nobody is logged in over SSH)';
+      $('secLogins').textContent = r.logins || '(no login history available)';
+      $('secLockouts').innerHTML = r.lockouts.map((l) => `<tr><td>${esc(l.ip)}</td><td>${l.failures}</td><td class="muted">${new Date(l.since).toLocaleString()}</td>
+        <td><button type="button" class="b-ghost" onclick="unblockIp(${js(l.ip)})">Unblock</button></td></tr>`).join('')
+        || '<tr><td colspan="4" class="muted">None.</td></tr>';
+      $('secAudit').innerHTML = r.audit.map((a) => `<tr><td class="muted">${new Date(a.t).toLocaleString()}</td><td>${esc(a.ip)}</td>
+        <td><b>${esc(a.method)}</b> ${esc(a.path)}</td>
+        <td><span class="pill ${a.status < 400 ? 'p-green' : 'p-red'}">${a.status}</span></td>
+        <td class="muted" style="font-family:Consolas,monospace;font-size:11px">${a.body && Object.keys(a.body).length ? esc(JSON.stringify(a.body)) : ''}</td></tr>`).join('')
+        || '<tr><td colspan="5" class="muted">No changes yet.</td></tr>';
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function unblockIp(ip) {
+    try {
+      toast((await api('/security/lockouts/' + encodeURIComponent(ip), { method: 'DELETE' })).message, 'ok');
+      loadSecurity();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ── settings ────────────────────────────
+  let settingsData = null;
+
+  async function loadSettings() {
+    try {
+      settingsData = (await api('/settings')).settings;
+      $('setWebhook').value = settingsData.webhookUrl;
+      $('setCpu').value = settingsData.thresholds.cpu;
+      $('setMem').value = settingsData.thresholds.memory;
+      $('setDisk').value = settingsData.thresholds.disk;
+      $('setQuick').value = settingsData.quickCommands.map((c) => `${c.name} | ${c.command}`).join('\n');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function saveSettings() {
+    const quickCommands = $('setQuick').value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const i = l.indexOf('|');
+      return i < 0 ? { name: l, command: l } : { name: l.slice(0, i).trim(), command: l.slice(i + 1).trim() };
+    });
+    try {
+      const r = await api('/settings', {
+        method: 'PUT',
+        body: {
+          webhookUrl: $('setWebhook').value.trim(),
+          thresholds: { cpu: +$('setCpu').value, memory: +$('setMem').value, disk: +$('setDisk').value },
+          quickCommands,
+        },
+      });
+      settingsData = r.settings;
+      toast(r.message, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function testWebhook() {
+    await saveSettings();
+    try { toast((await api('/alerts/test', { method: 'POST' })).message, 'ok'); } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ── run command ─────────────────────────
+  function renderQuickCmds() {
+    $('quickCmds').innerHTML = (settingsData?.quickCommands || []).map((c, i) =>
+      `<button type="button" class="b-ghost" onclick="runQuick(${i})" title="${esc(c.command)}">${esc(c.name)}</button>`).join('');
+  }
+
+  const runQuick = (i) => runCommand(settingsData.quickCommands[i].command);
+
+  async function runCommand(preset) {
+    const command = typeof preset === 'string' ? preset : $('runCmd').value.trim();
+    if (!command) return;
+    try {
+      await api('/run', { method: 'POST', body: { command, cwd: $('runCwd').value.trim() || undefined } });
+      if (typeof preset !== 'string') $('runCmd').value = '';
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
   // ── start ───────────────────────────────
   let started = false;
   async function start() {
@@ -747,11 +1772,16 @@
     loadSystem();
     loadProjects();
     api('/jobs').then((r) => { r.jobs.forEach((j) => jobs.set(j.id, j)); renderJobs(); }).catch(() => {});
+    api('/metrics').then((r) => { samples = r.samples; drawCharts(); }).catch(() => {});
+    api('/alerts').then((r) => renderAlerts(r.active)).catch(() => {});
+    api('/settings').then((r) => { settingsData = r.settings; }).catch(() => {});
+    window.addEventListener('resize', () => { if (activeTab === 'overview') drawCharts(); });
     setInterval(() => {
       if (!$('autoRefresh').checked) return;
       if (activeTab === 'overview') { loadSystem(); loadProjects(); }
       if (activeTab === 'projects') loadProjects();
       if (activeTab === 'services') loadServices();
+      if (activeTab === 'monitors') loadMonitors();
     }, 5000);
   }
 
