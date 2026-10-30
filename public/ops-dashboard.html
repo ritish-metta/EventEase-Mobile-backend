@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EventEase Ops Dashboard</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; margin: 0; }
+  h2 { color: #38bdf8; margin: 0 0 18px 0; }
+  h3 { margin: 0 0 12px 0; color: #38bdf8; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-bottom: 18px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px 18px; }
+  input, select { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 7px 9px; font-size: 14px; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; margin: 2px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-blue { background: #38bdf8; color: #0f172a; }
+  .btn-green { background: #4ade80; color: #0f172a; }
+  .btn-orange { background: #fbbf24; color: #0f172a; }
+  .btn-red { background: #ef4444; color: white; }
+  .btn-grey { background: #334155; color: #e2e8f0; }
+
+  .topbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .topbar input { width: 260px; }
+  #msg { font-size: 13px; color: #94a3b8; }
+
+  .tiles { display: flex; gap: 12px; flex-wrap: wrap; }
+  .tile { flex: 1; min-width: 110px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px; }
+  .tile .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+  .tile .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .up { color: #4ade80; } .down { color: #ef4444; } .warn { color: #fbbf24; }
+
+  .row { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0 3px; }
+  .bar { height: 8px; background: #0f172a; border-radius: 999px; overflow: hidden; border: 1px solid #334155; }
+  .bar > div { height: 100%; background: #38bdf8; transition: width .4s; }
+  .bar > div.hot { background: #ef4444; }
+  .bar > div.mid { background: #fbbf24; }
+  .meta { color: #94a3b8; font-size: 12px; margin-top: 10px; line-height: 1.6; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: #64748b; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid #334155; }
+  td { padding: 7px 8px; border-bottom: 1px solid #1f2a3d; vertical-align: middle; }
+  .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .pill.online { background: rgba(74,222,128,.15); color: #4ade80; }
+  .pill.stopped, .pill.errored { background: rgba(239,68,68,.15); color: #ef4444; }
+  .pill.other { background: rgba(251,191,36,.15); color: #fbbf24; }
+
+  pre { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px; height: 320px; overflow: auto;
+        font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; margin: 10px 0 0; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<h2>☁️ EventEase Ops Dashboard</h2>
+
+<div class="topbar">
+  <input id="token" type="password" placeholder="Ops token (OPS_TOKEN from .env)" />
+  <button class="btn-blue" onclick="saveToken()">Save token</button>
+  <label style="font-size:13px"><input type="checkbox" id="auto" checked /> Auto refresh (5s)</label>
+  <button class="btn-grey" onclick="refreshAll()">Refresh now</button>
+  <span id="msg"></span>
+</div>
+
+<!-- Health -->
+<div class="card" style="margin-bottom:18px">
+  <h3>Health</h3>
+  <div class="tiles">
+    <div class="tile"><div class="label">API</div><div class="value" id="hApi">–</div></div>
+    <div class="tile"><div class="label">MongoDB</div><div class="value" id="hMongo">–</div></div>
+    <div class="tile"><div class="label">Redis</div><div class="value" id="hRedis">–</div></div>
+    <div class="tile"><div class="label">App uptime</div><div class="value" id="hUptime">–</div></div>
+    <div class="tile"><div class="label">Served by</div><div class="value" id="hWorker">–</div></div>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- System -->
+  <div class="card">
+    <h3>Server</h3>
+    <div class="row"><span>CPU load (1m)</span><span id="cpuText">–</span></div>
+    <div class="bar"><div id="cpuBar" style="width:0"></div></div>
+    <div class="row"><span>Memory</span><span id="memText">–</span></div>
+    <div class="bar"><div id="memBar" style="width:0"></div></div>
+    <div class="row"><span>Disk</span><span id="diskText">–</span></div>
+    <div class="bar"><div id="diskBar" style="width:0"></div></div>
+    <div class="meta" id="sysMeta">–</div>
+  </div>
+
+  <!-- Deploy -->
+  <div class="card">
+    <h3>Deploy</h3>
+    <div class="meta" id="gitMeta" style="margin-top:0">–</div>
+    <div class="controls" style="margin-top:10px">
+      <button class="btn-green" onclick="deploy()">⬇️ Pull main &amp; redeploy</button>
+      <button class="btn-grey" onclick="loadActions()">Show action log</button>
+    </div>
+    <pre id="actionsLog" style="height:150px">Deploy and process actions write their output here.</pre>
+  </div>
+</div>
+
+<!-- Processes -->
+<div class="card" style="margin-bottom:18px">
+  <h3>PM2 processes</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Mode</th><th>CPU</th><th>Memory</th><th>Restarts</th><th>Uptime</th><th>Actions</th></tr></thead>
+    <tbody id="procBody"><tr><td colspan="9" class="meta">Enter your ops token to load processes.</td></tr></tbody>
+  </table>
+  <div class="controls" style="margin-top:12px">
+    <span style="font-size:13px">Scale</span>
+    <select id="scaleName"></select>
+    <span style="font-size:13px">to</span>
+    <input id="scaleCount" type="number" min="1" max="8" value="2" style="width:70px" />
+    <button class="btn-blue" onclick="scale()">Apply</button>
+    <span class="meta" style="margin:0">(cluster mode only)</span>
+  </div>
+</div>
+
+<!-- Logs -->
+<div class="card">
+  <h3>Logs</h3>
+  <div class="controls">
+    <select id="logName"><option value="">All processes</option></select>
+    <select id="logType"><option value="out">Output</option><option value="err">Errors</option></select>
+    <select id="logLines"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+    <button class="btn-blue" onclick="loadLogs()">Load logs</button>
+  </div>
+  <pre id="logs">Click "Load logs".</pre>
+</div>
+
+<script>
+  // Same origin when served by the backend (/ops-dashboard); fallback for opening the file directly.
+  const API = (location.protocol.startsWith('http') ? location.origin : 'http://16.171.23.221:5000') + '/api/ops';
+
+  const $ = (id) => document.getElementById(id);
+  $('token').value = localStorage.getItem('opsToken') || '';
+
+  function saveToken() {
+    localStorage.setItem('opsToken', $('token').value.trim());
+    refreshAll();
+  }
+
+  function setMsg(text, cls = '') {
+    $('msg').textContent = text;
+    $('msg').className = cls;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'x-ops-token': localStorage.getItem('opsToken') || '' },
+    });
+    const data = await res.json().catch(() => ({ success: false, message: `HTTP ${res.status}` }));
+    // /health answers 503 with a body when degraded — that's data, not an error
+    if (!res.ok && !(path === '/health' && res.status === 503)) throw new Error(data.message || `HTTP ${res.status}`);
+    return data;
+  }
+
+  const fmtBytes = (b) => {
+    if (!b) return '0 B';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(b) / Math.log(1024));
+    return (b / 1024 ** i).toFixed(i ? 1 : 0) + ' ' + u[i];
+  };
+  const fmtDuration = (sec) => {
+    sec = Math.max(0, Math.round(sec));
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${sec % 60}s` : `${sec}s`;
+  };
+  const setBar = (id, pct) => {
+    const el = $(id);
+    el.style.width = Math.min(100, pct).toFixed(0) + '%';
+    el.className = pct > 85 ? 'hot' : pct > 65 ? 'mid' : '';
+  };
+  const statusSpan = (ok, text) => `<span class="${ok ? 'up' : 'down'}">${text}</span>`;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ── Health (public) ───────────────────────────
+  async function loadHealth() {
+    try {
+      const h = await api('/health');
+      $('hApi').innerHTML = statusSpan(h.status === 'ok', h.status === 'ok' ? 'OK' : 'DEGRADED');
+      $('hMongo').innerHTML = statusSpan(h.mongo === 'connected', h.mongo);
+      $('hRedis').innerHTML = statusSpan(h.redis.status === 'up',
+        h.redis.status === 'up' ? `up · ${h.redis.latencyMs}ms` : 'down');
+      $('hUptime').textContent = fmtDuration(h.uptimeSec);
+      $('hWorker').textContent = h.worker !== null ? `worker ${h.worker}` : `pid ${h.pid}`;
+    } catch (err) {
+      $('hApi').innerHTML = statusSpan(false, 'UNREACHABLE');
+    }
+  }
+
+  // ── System ────────────────────────────────────
+  async function loadSystem() {
+    const s = await api('/system');
+    const loadPct = (s.loadAvg[0] / s.cpus) * 100;
+    $('cpuText').textContent = `${s.loadAvg[0].toFixed(2)} / ${s.cpus} vCPU`;
+    setBar('cpuBar', loadPct);
+
+    const used = s.memory.totalBytes - s.memory.freeBytes;
+    $('memText').textContent = `${fmtBytes(used)} / ${fmtBytes(s.memory.totalBytes)}`;
+    setBar('memBar', (used / s.memory.totalBytes) * 100);
+
+    if (s.disk) {
+      $('diskText').textContent = `${fmtBytes(s.disk.usedBytes)} / ${fmtBytes(s.disk.totalBytes)}`;
+      setBar('diskBar', (s.disk.usedBytes / s.disk.totalBytes) * 100);
+    } else {
+      $('diskText').textContent = 'n/a';
+    }
+
+    $('sysMeta').innerHTML = `Host: ${esc(s.hostname)}<br>OS: ${esc(s.platform)}<br>Node: ${esc(s.node)} · Server uptime: ${fmtDuration(s.uptimeSec)}`;
+    $('gitMeta').innerHTML = s.git
+      ? `Running commit <b>${esc(s.git.commit)}</b> on <b>${esc(s.git.branch)}</b><br>"${esc(s.git.message)}" · ${esc(s.git.when)}`
+      : 'Not a git checkout';
+  }
+
+  // ── Processes ─────────────────────────────────
+  async function loadProcesses() {
+    const { processes } = await api('/processes');
+    $('procBody').innerHTML = processes.map((p) => {
+      const pill = p.status === 'online' ? 'online' : ['stopped', 'errored'].includes(p.status) ? p.status : 'other';
+      const uptime = p.status === 'online' ? fmtDuration((Date.now() - p.startedAt) / 1000) : '–';
+      const n = esc(p.name);
+      return `<tr>
+        <td>${p.id}</td><td>${n}</td>
+        <td><span class="pill ${pill}">${esc(p.status)}</span></td>
+        <td>${p.mode === 'cluster_mode' ? 'cluster' : 'fork'}</td>
+        <td>${p.cpu}%</td><td>${fmtBytes(p.memoryBytes)}</td><td>${p.restarts}</td><td>${uptime}</td>
+        <td>
+          <button class="btn-blue" onclick="procAction('${n}','reload')">Reload</button>
+          <button class="btn-orange" onclick="procAction('${n}','restart')">Restart</button>
+          ${p.status === 'online'
+            ? `<button class="btn-red" onclick="procAction('${n}','stop')">Stop</button>`
+            : `<button class="btn-green" onclick="procAction('${n}','start')">Start</button>`}
+        </td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="meta">No PM2 processes.</td></tr>';
+
+    // one entry per app name for the scale / log pickers
+    const names = [...new Set(processes.map((p) => p.name))];
+    fillSelect('scaleName', names);
+    fillSelect('logName', names, 'All processes');
+  }
+
+  function fillSelect(id, names, allLabel) {
+    const sel = $(id), current = sel.value;
+    sel.innerHTML = (allLabel ? `<option value="">${allLabel}</option>` : '') +
+      names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+  }
+
+  async function procAction(name, action) {
+    const warn = action === 'stop'
+      ? `Stop "${name}"? If this is the backend itself, this dashboard will go offline until you start it from the server.`
+      : `${action} "${name}"?`;
+    if (!confirm(warn)) return;
+    try {
+      const r = await api(`/processes/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
+      setMsg(r.message, 'up');
+      setTimeout(refreshAll, 3000);
+    } catch (err) { setMsg(err.message, 'down'); }
+  }
+
+  async function scale() {
+    const name = $('scaleName').value, instances = +$('scaleCount').value;
+    if (!name || !confirm(`Scale "${name}" to ${instances} instance(s)?`)) return;
+    try {
+      const r = await api(`/processes/${encodeURIComponent(name)}/scale`, { method: 'POST', body: JSON.stringify({ instances }) });
+      setMsg(r.message, 'up');
+      setTimeout(refreshAll, 4000);
+    } catch (err) { setMsg(err.message, 'down'); }
+  }
+
+  // ── Logs ──────────────────────────────────────
+  async function loadLogs() {
+    try {
+      const q = new URLSearchParams({ name: $('logName').value, type: $('logType').value, lines: $('logLines').value });
+      const r = await api('/logs?' + q);
+      $('logs').textContent = r.lines.join('\n') || '(empty)';
+      $('logs').scrollTop = $('logs').scrollHeight;
+    } catch (err) { $('logs').textContent = 'Error: ' + err.message; }
+  }
+
+  // ── Deploy ────────────────────────────────────
+  async function deploy() {
+    if (!confirm('Pull latest main from GitHub, reinstall packages and reload the app?')) return;
+    try {
+      const r = await api('/deploy', { method: 'POST' });
+      setMsg(r.message, 'up');
+      // the app reloads during deploy, so poll the log for a while
+      let n = 0;
+      const t = setInterval(() => { loadActions(); if (++n > 30) clearInterval(t); }, 3000);
+    } catch (err) { setMsg(err.message, 'down'); }
+  }
+
+  async function loadActions() {
+    try {
+      const r = await api('/actions-log');
+      $('actionsLog').textContent = r.lines.join('\n') || '(no actions yet)';
+      $('actionsLog').scrollTop = $('actionsLog').scrollHeight;
+    } catch (err) { /* app may be mid-reload */ }
+  }
+
+  // ── Refresh loop ──────────────────────────────
+  async function refreshAll() {
+    await loadHealth();
+    if (!localStorage.getItem('opsToken')) return setMsg('Enter your ops token to unlock server controls.', 'warn');
+    try {
+      await Promise.all([loadSystem(), loadProcesses()]);
+      setMsg('Updated ' + new Date().toLocaleTimeString());
+    } catch (err) {
+      setMsg(err.message, 'down');
+    }
+  }
+
+  refreshAll();
+  setInterval(() => { if ($('auto').checked) refreshAll(); }, 5000);
+</script>
+</body>
+</html>

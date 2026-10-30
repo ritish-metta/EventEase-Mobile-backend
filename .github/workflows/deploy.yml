@@ -30,6 +30,9 @@ jobs:
   deploy:
     name: Deploy to instance
     needs: build
+    # On/off switch: repo Settings → Secrets and variables → Actions → Variables
+    # DEPLOY_ENABLED = false pauses auto-deploy. Missing or true = deploy.
+    if: vars.DEPLOY_ENABLED != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
