@@ -77,3 +77,17 @@ body.ide-focus #focusBtn use { color: inherit; }
   border: 1px solid var(--lavender); background: var(--card); box-shadow: 0 0 0 3px rgba(169, 179, 246, .25); }
 .tree-input.bad { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
 .code-tree .node[draggable="true"]:active { cursor: grabbing; }
+
+/* deploy from the editor */
+.ide-actions .ide-deploy { height: 38px; padding: 0 16px; font-size: 13px; font-weight: 600; }
+.deploy-status { display: inline-flex; align-items: center; gap: 7px; max-width: 360px; font-size: 12.5px; color: var(--muted); }
+.deploy-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deploy-status.ok { color: var(--ok); font-weight: 600; }
+.deploy-status.err { color: var(--red); }
+.deploy-status a { color: inherit; font-weight: 600; white-space: nowrap; }
+.spin { width: 13px; height: 13px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.deploy-steps { display: grid; gap: 10px; margin-bottom: 14px; font-size: 14px; }
+.deploy-steps > div { display: flex; align-items: center; gap: 12px; }
+.deploy-steps b:first-child { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; background: var(--surface); font-size: 12.5px; }
+.deploy-steps .up .ic { width: 16px; height: 16px; }

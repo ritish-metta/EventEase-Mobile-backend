@@ -285,6 +285,7 @@ require('./features/monitors')(ctx, { alerts });
 require('./features/redis')(ctx);
 require('./features/cron')(ctx);
 const backups = require('./features/backups')(ctx);
+require('./features/gitaccess')(ctx);
 
 // Pending Ubuntu updates, cached — apt-check takes a second or two.
 let updatesCache = { at: 0, value: null };

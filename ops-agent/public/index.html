@@ -306,6 +306,8 @@
               <button type="button" class="b-grey" onclick="saveAllCode()" title="Save all (Ctrl+Alt+S)"><svg class="ic"><use href="#i-layers"/></svg><span>Save all</span></button>
               <button type="button" class="b-orange" onclick="saveAndRestart()" title="Save all and restart the app"><svg class="ic"><use href="#i-rotate"/></svg><span>Save &amp; restart</span></button>
               <button type="button" class="b-primary" onclick="openChanges()" title="See what changed and push to GitHub"><svg class="ic"><use href="#i-git"/></svg><span>Changes</span><span class="count" id="changeCount" hidden>0</span></button>
+              <button type="button" class="b-gradient ide-deploy" id="ideDeployBtn" onclick="openEditorDeploy()" title="Save all, push to GitHub and let the pipeline deploy it"><svg class="ic"><use href="#i-rocket"/></svg><span>Deploy</span></button>
+              <span class="deploy-status" id="deployStatus" hidden></span>
               <button type="button" class="b-grey" id="focusBtn" onclick="toggleFocus()" title="Focus mode: editor and terminal fill the whole screen (Ctrl+Shift+Enter, Esc to leave)"><svg class="ic"><use href="#i-maximize"/></svg><span>Focus</span></button>
             </div>
           </div>
@@ -658,6 +660,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script src="js/app.js"></script>
 <script src="js/code.js"></script>
+<script src="js/deploy.js"></script>
 <script>start0();</script>
 </body>
 </html>
