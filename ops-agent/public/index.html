@@ -378,7 +378,7 @@
       $('osVal').textContent = s.platform;
 
       $('procTable').innerHTML = s.processes.map((p) => `<tr>
-        <td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}</td><td>${p.mem}</td><td>${esc(p.elapsed)}</td><td>${esc(p.command)}</td>
+        <td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}</td><td>${p.mem}</td><td>${esc(p.elapsed)}</td><td title="${esc(p.command)}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:Consolas,monospace">${esc(p.command)}</td>
         <td><button type="button" class="b-red" onclick="killProc(${p.pid}, ${js(p.command)})">Kill</button></td></tr>`).join('');
       $('portTable').innerHTML = s.ports.map((p) => `<tr><td><b>${p.port}</b></td><td>${esc(p.address)}</td><td>${esc(p.process || '–')}${p.pid ? ` (${p.pid})` : ''}</td></tr>`).join('')
         || '<tr><td colspan="3" class="muted">–</td></tr>';

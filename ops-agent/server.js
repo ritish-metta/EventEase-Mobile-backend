@@ -258,7 +258,7 @@ app.use('/api', (req, res, next) => {
 app.get('/api/system', async (req, res) => {
   const [df, ps, ss] = await Promise.all([
     safeRun('df', ['-kP', '/']),
-    safeRun('ps', ['-eo', 'pid,user,pcpu,pmem,etime,comm', '--sort=-pcpu']),
+    safeRun('ps', ['-eo', 'pid,user,pcpu,pmem,etime,args', '--sort=-pcpu']),
     safeRun('ss', ['-tlnpH']),
   ]);
 
