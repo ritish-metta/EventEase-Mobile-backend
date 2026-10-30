@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const os = require('os');
+const store = require('./store');
 
 const INTERVAL_MS = 10000;
 const HISTORY = 720; // 2 h at 10 s
@@ -43,7 +44,9 @@ function memInfo() {
 }
 
 module.exports = function metrics(ctx) {
-  const samples = [];
+  // history survives agent restarts (every deploy restarts the agent)
+  const samples = (store.load('metrics', []) || []).filter((s) => s.t > Date.now() - HISTORY * INTERVAL_MS);
+  let sinceSave = 0;
   let prevCpu = cpuTimes();
   let prevNet = netBytes();
   let prevTime = Date.now();
@@ -71,6 +74,10 @@ module.exports = function metrics(ctx) {
     samples.push(s);
     if (samples.length > HISTORY) samples.shift();
     ctx.emit('metrics', s);
+    if (++sinceSave >= 6) { // once a minute
+      sinceSave = 0;
+      try { store.save('metrics', samples); } catch { /* disk full: keep running */ }
+    }
   }
 
   setInterval(sample, INTERVAL_MS).unref();

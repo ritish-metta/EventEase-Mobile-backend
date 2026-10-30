@@ -1,444 +1,630 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Server Control Panel</title>
+<meta name="theme-color" content="#c3d9cb">
+<title>OpsEdge · Server Control</title>
+<script>document.documentElement.dataset.theme = localStorage.getItem('opsTheme') || 'light';</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; }
-  a { color: #38bdf8; }
-  h3 { margin: 0 0 12px 0; color: #38bdf8; font-size: 15px; }
-
-  /* layout */
-  header { display: flex; align-items: center; gap: 14px; padding: 12px 20px; background: #020617; border-bottom: 1px solid #1e293b; flex-wrap: wrap; }
-  header .title { font-weight: 700; color: #38bdf8; font-size: 17px; }
-  header .host { color: #94a3b8; font-size: 13px; }
-  header .spacer { flex: 1; }
-  nav { display: flex; gap: 4px; padding: 0 20px; background: #020617; border-bottom: 1px solid #1e293b; overflow-x: auto; }
-  nav button { background: none; color: #94a3b8; border-radius: 0; border-bottom: 2px solid transparent; padding: 11px 14px; margin: 0; }
-  nav button.active { color: #38bdf8; border-bottom-color: #38bdf8; }
-  nav .badge { background: #fbbf24; color: #0f172a; border-radius: 999px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
-  main { padding: 20px; }
-  .tab { display: none; }
-  .tab.active { display: block; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 16px; }
-  .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
-  .grid .card { margin-bottom: 0; }
-
-  /* controls */
-  input, select, textarea { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 7px 9px; font-size: 13px; font-family: inherit; }
-  textarea { width: 100%; font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
-  button { cursor: pointer; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; margin: 2px; font-family: inherit; }
-  button:disabled { opacity: .4; cursor: not-allowed; }
-  .b-blue { background: #38bdf8; color: #0f172a; }
-  .b-green { background: #4ade80; color: #0f172a; }
-  .b-orange { background: #fbbf24; color: #0f172a; }
-  .b-red { background: #ef4444; color: #fff; }
-  .b-grey { background: #334155; color: #e2e8f0; }
-  .b-ghost { background: transparent; color: #94a3b8; border: 1px solid #334155; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .muted { color: #94a3b8; font-size: 12px; }
-  .up { color: #4ade80; } .down { color: #ef4444; } .warn { color: #fbbf24; }
-
-  /* metrics */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .tile { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 12px 14px; }
-  .tile .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
-  .tile .value { font-size: 20px; font-weight: 700; margin: 4px 0 8px; }
-  .bar { height: 7px; background: #0f172a; border-radius: 999px; overflow: hidden; border: 1px solid #334155; }
-  .bar > div { height: 100%; background: #38bdf8; transition: width .4s; }
-  .bar > div.mid { background: #fbbf24; } .bar > div.hot { background: #ef4444; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  th { text-align: left; color: #64748b; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid #334155; }
-  td { padding: 6px 8px; border-bottom: 1px solid #1f2a3d; vertical-align: middle; }
-  .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-  .p-green { background: rgba(74,222,128,.15); color: #4ade80; }
-  .p-red { background: rgba(239,68,68,.15); color: #ef4444; }
-  .p-orange { background: rgba(251,191,36,.15); color: #fbbf24; }
-  .p-grey { background: rgba(148,163,184,.15); color: #94a3b8; }
-
-  /* projects */
-  .projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
-  .proj { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px; }
-  .proj .head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .proj .name { font-weight: 700; font-size: 15px; }
-  .proj .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
-  .proj .stats div { background: #0f172a; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
-  .proj .stats b { display: block; font-size: 14px; }
-  .proj .meta { font-size: 12px; color: #94a3b8; line-height: 1.6; word-break: break-all; }
-
-  pre.out { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px; overflow: auto; font-size: 12px;
-            line-height: 1.45; white-space: pre-wrap; word-break: break-all; margin: 10px 0 0; font-family: Consolas, monospace; }
-  #terminal { height: calc(100vh - 210px); min-height: 360px; background: #000; border-radius: 8px; padding: 6px; }
-
-  /* files */
-  .crumbs { font-family: Consolas, monospace; font-size: 13px; }
-  .crumbs a { cursor: pointer; text-decoration: none; }
-  .file-row { cursor: pointer; }
-  .file-row:hover td { background: #243247; }
-
-  /* jobs */
-  .job { border: 1px solid #334155; border-radius: 8px; margin-bottom: 10px; background: #0f172a; }
-  .job .jh { display: flex; gap: 10px; align-items: center; padding: 8px 12px; cursor: pointer; }
-  .job .jh .t { flex: 1; font-weight: 600; font-size: 13px; }
-  .job pre.out { margin: 0; border: none; border-top: 1px solid #334155; border-radius: 0 0 8px 8px; max-height: 360px; display: none; }
-  .job.open pre.out { display: block; }
-
-  /* modal + toast + login */
-  .overlay { position: fixed; inset: 0; background: rgba(2,6,23,.8); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
-  .overlay.show { display: flex; }
-  .modal { background: #1e293b; border: 1px solid #334155; border-radius: 12px; width: min(900px, 100%); max-height: 90vh; display: flex; flex-direction: column; }
-  .modal .mh { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid #334155; }
-  .modal .mh h3 { margin: 0; flex: 1; }
-  .modal .mb { padding: 16px 18px; overflow: auto; }
-  .modal .mf { padding: 12px 18px; border-top: 1px solid #334155; text-align: right; }
-  #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 60; }
-  .toast { background: #1e293b; border: 1px solid #334155; border-left: 4px solid #38bdf8; border-radius: 8px; padding: 10px 14px; font-size: 13px; max-width: 380px; }
-  .toast.err { border-left-color: #ef4444; } .toast.ok { border-left-color: #4ade80; }
-  #login .modal { width: min(420px, 100%); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: #64748b; }
-  .dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade80; } .dot.off { background: #ef4444; }
-  .code-wrap { display: grid; grid-template-columns: 270px 1fr; height: calc(100vh - 230px); min-height: 420px;
-               border: 1px solid #334155; border-radius: 10px; overflow: hidden; background: #1e1e1e; }
-  .code-tree { background: #0f172a; border-right: 1px solid #334155; overflow: auto; padding: 6px 0; font-size: 13px; }
-  .code-tree .node { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .code-tree .node:hover { background: #1e293b; }
-  .code-tree .node.active { background: #1e3a5f; }
-  .code-main { display: flex; flex-direction: column; min-width: 0; }
-  .code-tabs { display: flex; overflow-x: auto; background: #0f172a; border-bottom: 1px solid #334155; min-height: 34px; }
-  .code-tab { padding: 7px 12px; font-size: 12.5px; color: #94a3b8; cursor: pointer; white-space: nowrap; border-right: 1px solid #1e293b; display: flex; gap: 8px; align-items: center; }
-  .code-tab.active { background: #1e1e1e; color: #e2e8f0; }
-  .code-tab .x { opacity: .5; } .code-tab .x:hover { opacity: 1; color: #ef4444; }
-  .code-tab .dirty { color: #fbbf24; }
-  #codeEditor { flex: 1; min-height: 0; }
-  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-  .charts canvas { width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 8px; }
-  .chart-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
-  .chart-label b { color: #e2e8f0; margin-left: 6px; }
-  .notice { padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
-  .notice.crit { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
-  .notice.warn { background: rgba(251,191,36,.10); border: 1px solid rgba(251,191,36,.4); color: #fde68a; }
-  .notice.info { background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.35); color: #bae6fd; }
-  .spark { display: flex; gap: 2px; align-items: flex-end; height: 26px; margin: 8px 0; }
-  .spark span { flex: 1; min-width: 2px; border-radius: 2px; background: #4ade80; }
-  .spark span.bad { background: #ef4444; }
-  #alertBell.has { color: #ef4444; border-color: #ef4444; }
-  code { background: #0f172a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-  .form { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; align-items: center; font-size: 13px; }
-</style>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
-<header>
-  <span class="title">🛠️ Server Control Panel</span>
-  <span class="host"><span class="dot" id="connDot"></span> <span id="hostInfo">connecting…</span></span>
-  <span class="spacer"></span>
-  <button type="button" class="b-ghost" id="alertBell" onclick="openAlerts()" title="Alerts">🔔 <span id="alertCount">0</span></button>
-  <label class="muted"><input type="checkbox" id="autoRefresh" checked> Auto refresh</label>
-  <button type="button" class="b-ghost" onclick="logout()">Log out</button>
-</header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="3.5"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+    <symbol id="i-logs" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6M9 9h2"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v1"/><path d="M3 7v10a2 2 0 0 0 2 2h12.5a2 2 0 0 0 1.9-1.4L21.8 11H7.2a2 2 0 0 0-1.9 1.4L3 19"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6M19 6l1.5-1.5"/><path d="M3 9h3M2 13h3M3 17h3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h16"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18M8 14h5M8 18h8"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.4 6.4L3 16M3 21v-5h5"/></symbol>
+    <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5c0 4-6 3-11 6"/></symbol>
+    <symbol id="i-diff" viewBox="0 0 24 24"><path d="M12 3v14M5 10h14M5 21h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m10.3 3.9-8.1 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-file-plus" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15h6"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/></symbol>
+    <symbol id="i-memory" viewBox="0 0 24 24"><path d="M6 19v-3M10 19v-3M14 19v-3M18 19v-3"/><rect x="2" y="6" width="20" height="10" rx="2"/><path d="M7 10v2M12 10v2M17 10v2"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 24 24"><path d="M22 12H2M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1"/><path d="M6 16h.01M10 16h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></symbol>
+    <symbol id="i-wrap" viewBox="0 0 24 24"><path d="M3 6h18M3 12h15a3 3 0 1 1 0 6h-4M3 18h7"/><path d="m16 16-2 2 2 2"/></symbol>
+    <symbol id="i-format" viewBox="0 0 24 24"><path d="M21 10H7M21 6H3M21 14H3M21 18H7"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-broom" viewBox="0 0 24 24"><path d="m13 11 8-8M9.5 9.5l5 5M4 20c1-4 3-8 5.5-10.5l5 5C12 17 8 19 4 20"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1"/><path d="m12 15-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2"/><path d="M9 12H4s.6-3 2-4c1.6-1 5 0 5 0M12 15v5s3-.6 4-2c1-1.6 0-5 0-5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5M7 4l5 5 5-5"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+    <symbol id="i-net" viewBox="0 0 24 24"><path d="M7 17V7M4 10l3-3 3 3M17 7v10M14 14l3 3 3-3"/></symbol>
+  </defs>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+    <symbol id="i-cap" viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7"/></symbol>
+    <symbol id="i-play-o" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
+    <symbol id="i-maximize" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-paste" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.5 4.2M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></symbol>
+    <symbol id="i-hammer" viewBox="0 0 24 24"><path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9M17.6 15 22 10.6M20.9 11.7l-1.3-1.3a2 2 0 0 1 0-2.8l-.4-.4a5.7 5.7 0 0 0-8-.1L9 9l.6.6a4 4 0 0 1 1.2 2.8V13l2 2h1.5a3 3 0 0 1 2.1.9l1.6 1.5"/></symbol>
+  </defs>
+</svg>
 
-<nav id="nav">
-  <button type="button" data-tab="overview" class="active">📊 Overview</button>
-  <button type="button" data-tab="projects">📦 Projects</button>
-  <button type="button" data-tab="code">🧑‍💻 Code</button>
-  <button type="button" data-tab="monitors">🩺 Monitors</button>
-  <button type="button" data-tab="terminal">💻 Terminal</button>
-  <button type="button" data-tab="logs">📜 Logs</button>
-  <button type="button" data-tab="files">📁 Files</button>
-  <button type="button" data-tab="services">⚙️ Services</button>
-  <button type="button" data-tab="redis">🗄️ Redis</button>
-  <button type="button" data-tab="cron">⏰ Cron</button>
-  <button type="button" data-tab="activity">⏱️ Activity <span class="badge" id="runningBadge" hidden>0</span></button>
-  <button type="button" data-tab="security">🛡️ Security</button>
-  <button type="button" data-tab="settings">🔧 Settings</button>
-</nav>
+<div class="frame">
+  <!-- ── Icon rail (the black sidebar of the design) ── -->
+  <aside class="rail" id="sidebar">
+    <div class="rail-logo" title="OpsEdge">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 33 17 7h6L13 33zM18 33 28 7h6L24 33z" fill="currentColor"/></svg>
+    </div>
+    <nav class="rail-nav" id="rail">
+      <button type="button" data-group="monitor" class="active" title="Monitor"><svg class="ic"><use href="#i-home"/></svg><span>Monitor</span></button>
+      <button type="button" data-group="build" title="Build"><svg class="ic"><use href="#i-code"/></svg><span>Build</span></button>
+      <button type="button" data-group="system" title="System"><svg class="ic"><use href="#i-server"/></svg><span>System</span></button>
+    </nav>
+    <div class="rail-bottom">
+      <button type="button" class="rail-btn" onclick="toggleTheme()" title="Light / dark" aria-label="Switch theme"><svg class="ic" id="themeIcon"><use href="#i-moon"/></svg></button>
+      <button type="button" class="rail-btn" id="alertBell" onclick="openAlerts()" title="Alerts" aria-label="Alerts"><svg class="ic"><use href="#i-bell"/></svg><span class="bell-dot" id="alertCount">0</span></button>
+      <button type="button" class="rail-btn" onclick="logout()" title="Log out" aria-label="Log out"><svg class="ic"><use href="#i-logout"/></svg></button>
+      <div class="rail-avatar" id="railAvatar" title="Server"><span class="dot" id="connDot"></span><b>U</b></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" onclick="toggleSidebar(false)"></div>
 
-<main>
-  <!-- ── Overview ─────────────────────────── -->
-  <section class="tab active" id="tab-overview">
-    <div id="alertBanner"></div>
-    <div class="tiles">
-      <div class="tile"><div class="label">CPU load</div><div class="value" id="cpuVal">–</div><div class="bar"><div id="cpuBar"></div></div></div>
-      <div class="tile"><div class="label">Memory</div><div class="value" id="memVal">–</div><div class="bar"><div id="memBar"></div></div></div>
-      <div class="tile"><div class="label">Disk</div><div class="value" id="diskVal">–</div><div class="bar"><div id="diskBar"></div></div></div>
-      <div class="tile"><div class="label">Swap</div><div class="value" id="swapVal">–</div><div class="bar"><div id="swapBar"></div></div></div>
-      <div class="tile"><div class="label">Server uptime</div><div class="value" id="upVal">–</div><div class="muted" id="osVal"></div></div>
-      <div class="tile"><div class="label">Projects online</div><div class="value" id="projVal">–</div><div class="muted" id="projSub"></div></div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="margin-bottom:6px">
-        <h3 style="margin:0;flex:1">Live charts</h3>
-        <select id="chartRange" onchange="drawCharts()">
-          <option value="90">Last 15 min</option><option value="360" selected>Last 1 hour</option><option value="720">Last 2 hours</option>
-        </select>
-      </div>
-      <div class="charts">
-        <div><div class="chart-label">CPU % <b id="cpuNow"></b></div><canvas id="cpuChart" height="120"></canvas></div>
-        <div><div class="chart-label">Memory % <b id="memNow"></b></div><canvas id="memChart" height="120"></canvas></div>
-        <div><div class="chart-label">Network <span class="up">⬇ in</span> / <span class="warn">⬆ out</span> <b id="netNow"></b></div><canvas id="netChart" height="120"></canvas></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Server actions</h3>
-      <div id="serverNotices"></div>
-      <div class="row">
-        <button type="button" class="b-blue" onclick="serverAction('pm2-save', 'Save the current PM2 process list (so it comes back after reboot)?')">💾 Save PM2 list</button>
-        <button type="button" class="b-grey" id="swapBtn" onclick="serverAction('swap', 'Create a 2 GB swap file? Gives the server extra memory room so apps do not crash when RAM is full.')">💾 Create 2 GB swap</button>
-        <button type="button" class="b-grey" onclick="serverAction('clean-logs', 'Clear all PM2 logs and trim system logs to 100 MB?')">🧹 Clean logs</button>
-        <button type="button" class="b-orange" onclick="serverAction('update', 'Install all Ubuntu package updates? This can take several minutes.')">⬆️ Update packages</button>
-        <button type="button" class="b-red" onclick="serverAction('reboot', 'REBOOT the whole server? Every app goes down for ~1 minute, then PM2 starts them again.')">🔁 Reboot server</button>
-      </div>
-      <p class="muted">"Stop instance" is not offered on purpose: a stopped EC2 instance can only be started again from the AWS console, not from this page.</p>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <h3>Top processes</h3>
-        <table><thead><tr><th scope="col">PID</th><th scope="col">User</th><th scope="col">CPU%</th><th scope="col">MEM%</th><th scope="col">Time</th><th scope="col">Command</th><th scope="col"></th></tr></thead>
-          <tbody id="procTable"></tbody></table>
-      </div>
-      <div class="card">
-        <h3>Open ports</h3>
-        <table><thead><tr><th scope="col">Port</th><th scope="col">Address</th><th scope="col">Process</th></tr></thead>
-          <tbody id="portTable"></tbody></table>
-        <p class="muted">A port also has to be allowed in the AWS security group to be reachable from the internet.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Projects ─────────────────────────── -->
-  <section class="tab" id="tab-projects">
-    <div class="row" style="margin-bottom:14px">
-      <button type="button" class="b-green" onclick="openAddProject()">➕ Add project</button>
-      <button type="button" class="b-grey" onclick="loadProjects()">↻ Refresh</button>
-      <span class="muted">Every app running under PM2 shows up here.</span>
-    </div>
-    <div class="projects" id="projectList"><p class="muted">Loading…</p></div>
-  </section>
-
-  <!-- ── Terminal ─────────────────────────── -->
-  <section class="tab" id="tab-terminal">
-    <div class="row" style="margin-bottom:10px">
-      <button type="button" class="b-blue" onclick="newTerminal()">➕ New session</button>
-      <span class="muted" id="termStatus">Not connected</span>
-    </div>
-    <div id="terminal"></div>
-  </section>
-
-  <!-- ── Logs ─────────────────────────────── -->
-  <section class="tab" id="tab-logs">
-    <div class="card">
-      <div class="row">
-        <select id="logProject"></select>
-        <select id="logType"><option value="out">Output</option><option value="err">Errors</option></select>
-        <select id="logLines"><option>100</option><option selected>300</option><option>1000</option><option>3000</option></select>
-        <button type="button" class="b-blue" onclick="loadLogs()">Load</button>
-        <button type="button" class="b-green" id="followBtn" onclick="toggleFollow()">▶ Live</button>
-        <button type="button" class="b-grey" onclick="document.getElementById('logOut').textContent=''">Clear view</button>
-        <input id="logFilter" placeholder="Filter text…" oninput="renderLogs()" style="flex:1;min-width:140px">
-      </div>
-      <pre class="out" id="logOut" style="height:calc(100vh - 260px);min-height:300px">Pick a project and click Load or Live.</pre>
-    </div>
-  </section>
-
-  <!-- ── Services ─────────────────────────── -->
-  <section class="tab" id="tab-services">
-    <div class="card">
-      <h3>System services</h3>
-      <table><thead><tr><th scope="col">Service</th><th scope="col">Description</th><th scope="col">State</th><th scope="col">Actions</th></tr></thead>
-        <tbody id="serviceTable"></tbody></table>
-      <p class="muted">Only services installed on this server are listed. ssh and PM2 startup can't be stopped from here, because that would lock you out.</p>
-    </div>
-  </section>
-
-  <!-- ── Files ────────────────────────────── -->
-  <section class="tab" id="tab-files">
-    <div class="card" id="filesCard">
-      <div class="row" style="margin-bottom:8px">
-        <button type="button" class="b-grey" id="backBtn" onclick="goBack()" title="Back">⬅ Back</button>
-        <button type="button" class="b-grey" onclick="goUp()" title="Parent folder">⬆ Up</button>
-        <button type="button" class="b-grey" onclick="browse(homeDir)" title="Home folder">🏠 Home</button>
-        <input id="pathInput" style="flex:1;min-width:220px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')browse(this.value)" title="Type a path and press Enter">
-        <button type="button" class="b-grey" onclick="browse(currentDir, false)" title="Refresh">↻</button>
-      </div>
-      <div class="row" style="margin-bottom:10px">
-        <span class="crumbs" id="crumbs"></span>
-        <span style="flex:1"></span>
-        <input id="fileFilter" placeholder="Filter…" oninput="renderFiles()" style="width:150px">
-        <label class="muted"><input type="checkbox" id="showHidden" onchange="renderFiles()"> Hidden files</label>
-        <button type="button" class="b-grey" onclick="newFile()">📄 New file</button>
-        <button type="button" class="b-grey" onclick="newFolder()">📁 New folder</button>
-        <button type="button" class="b-blue" onclick="$('uploadInput').click()">⬆ Upload</button>
-        <button type="button" class="b-grey" onclick="terminalHere()">💻 Terminal here</button>
-        <input type="file" id="uploadInput" multiple hidden onchange="uploadFiles(this.files); this.value=''">
-      </div>
-      <table><thead><tr><th scope="col">Name</th><th scope="col">Size</th><th scope="col">Modified</th><th scope="col">Actions</th></tr></thead>
-        <tbody id="fileTable"></tbody></table>
-      <p class="muted">Tip: drag &amp; drop files onto this box to upload them into the current folder.</p>
-    </div>
-  </section>
-
-  <!-- ── Activity ─────────────────────────── -->
-  <section class="tab" id="tab-activity">
-    <div class="card">
-      <h3>Run a command</h3>
-      <div class="row">
-        <input id="runCmd" placeholder="e.g. df -h" style="flex:3;min-width:240px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')runCommand()">
-        <input id="runCwd" placeholder="Folder (default: home)" style="flex:1;min-width:160px;font-family:Consolas,monospace">
-        <button type="button" class="b-blue" onclick="runCommand()">▶ Run</button>
-      </div>
-      <div class="row" id="quickCmds" style="margin-top:8px"></div>
-      <p class="muted">For interactive programs (nano, top, prompts) use the Terminal tab instead. Edit the quick buttons in Settings.</p>
-    </div>
-    <div class="card">
-      <h3>Activity</h3>
-      <p class="muted">Every action (deploy, restart, updates, commands…) runs here with its live output.</p>
-      <div id="jobList"></div>
-    </div>
-  </section>
-
-  <!-- ── Code editor ──────────────────────── -->
-  <section class="tab" id="tab-code">
-    <div class="row" style="margin-bottom:10px">
-      <select id="codeProject" onchange="setCodeRoot(this.value)" title="Project to open"></select>
-      <button type="button" class="b-green" onclick="saveActiveCode()" title="Ctrl+S">💾 Save</button>
-      <button type="button" class="b-grey" onclick="saveAllCode()">💾 Save all</button>
-      <button type="button" class="b-orange" onclick="saveAndRestart()">🔁 Save &amp; restart app</button>
-      <button type="button" class="b-blue" onclick="openChanges()">🔀 Changes &amp; commit</button>
-      <button type="button" class="b-ghost" onclick="refreshTree()" title="Reload file tree">↻</button>
-      <span class="muted" id="codeStatus"></span>
-    </div>
-    <div class="code-wrap">
-      <div class="code-tree" id="codeTree"><p class="muted">Loading editor…</p></div>
-      <div class="code-main">
-        <div class="code-tabs" id="codeTabs"></div>
-        <div id="codeEditor"></div>
-      </div>
-    </div>
-    <p class="muted">⚠ Edits saved here change the live server only. The next deploy replaces them with the code from GitHub,
-      so use <b>Changes &amp; commit</b> to push them to GitHub (which also deploys them).</p>
-  </section>
-
-  <!-- ── Monitors ─────────────────────────── -->
-  <section class="tab" id="tab-monitors">
-    <div class="row" style="margin-bottom:14px">
-      <button type="button" class="b-green" onclick="openMonitorForm()">➕ Add monitor</button>
-      <button type="button" class="b-grey" onclick="loadMonitors()">↻ Refresh</button>
-      <span class="muted">Checks a URL on a schedule. With auto-heal, a project that stops answering is restarted for you.</span>
-    </div>
-    <div class="projects" id="monitorList"><p class="muted">Loading…</p></div>
-  </section>
-
-  <!-- ── Redis ────────────────────────────── -->
-  <section class="tab" id="tab-redis">
-    <div class="tiles" id="redisTiles"></div>
-    <div class="card">
-      <div class="row">
-        <input id="redisPattern" value="*" style="flex:1;min-width:200px;font-family:Consolas,monospace" onkeydown="if(event.key==='Enter')loadRedisKeys()" title="Pattern, e.g. user:* or *session*">
-        <button type="button" class="b-blue" onclick="loadRedisKeys()">🔍 Search keys</button>
-        <button type="button" class="b-green" onclick="openRedisSet()">➕ Set key</button>
-        <button type="button" class="b-red" onclick="flushRedis()">🗑️ Delete ALL keys</button>
-      </div>
-      <table style="margin-top:10px"><thead><tr><th scope="col">Key</th><th scope="col">Type</th><th scope="col">Expires in</th><th scope="col">Actions</th></tr></thead>
-        <tbody id="redisKeys"><tr><td colspan="4" class="muted">Click "Search keys".</td></tr></tbody></table>
-      <p class="muted" id="redisNote"></p>
-    </div>
-  </section>
-
-  <!-- ── Cron ─────────────────────────────── -->
-  <section class="tab" id="tab-cron">
-    <div class="grid">
-      <div class="card">
-        <h3>Scheduled jobs (crontab of <span id="cronUser">this user</span>)</h3>
-        <textarea id="cronText" rows="16" spellcheck="false" placeholder="# minute hour day month weekday  command"></textarea>
-        <div class="row" style="margin-top:8px">
-          <button type="button" class="b-green" onclick="saveCron()">💾 Save crontab</button>
-          <button type="button" class="b-grey" onclick="loadCron()">↻ Reload</button>
-          <span class="muted" id="cronInfo"></span>
+  <!-- ── Main sheet ── -->
+  <div class="main">
+    <main class="content" id="content">
+      <div class="page-head">
+        <button type="button" class="icon-btn menu-btn" onclick="toggleSidebar()" title="Menu" aria-label="Menu"><svg class="ic"><use href="#i-menu"/></svg></button>
+        <div class="page-title">
+          <h1><span id="pageLight">My</span> <b id="pageTitle">Server</b></h1>
+          <p class="host-line"><span id="hostName">Connecting…</span><span class="sep">·</span><span id="hostInfo">–</span><span class="sep">·</span><span id="clockPill">–</span><span class="sep">·</span><span class="health-chip" id="healthScore" title="Server health score" onclick="openHealth()">Health –</span></p>
+          <p id="pageSub" hidden></p>
+        </div>
+        <div class="head-actions">
+          <label class="switch" title="Refresh data every 5 seconds"><input type="checkbox" id="autoRefresh" checked><span class="track"></span><span class="switch-label">Live</span></label>
+          <button type="button" class="b-outline" onclick="openSearch()" title="Search (Ctrl+K)"><svg class="ic"><use href="#i-search"/></svg><span>Search</span><kbd>Ctrl K</kbd></button>
+          <button type="button" class="b-outline" onclick="showTab('settings')"><svg class="ic"><use href="#i-gear"/></svg><span>Settings</span></button>
+          <button type="button" class="b-gradient" onclick="openQuickDeploy()"><svg class="ic"><use href="#i-plus"/></svg><span>Deploy a project</span></button>
         </div>
       </div>
-      <div class="card">
-        <h3>Examples, click to add</h3>
-        <div id="cronExamples"></div>
-        <p class="muted">Format: <code>minute hour day-of-month month weekday command</code>. Times are in the server's timezone (UTC on EC2).
-          Send output to a file (<code>&gt;&gt; ~/cron.log 2&gt;&amp;1</code>) so you can read it in Files.</p>
-      </div>
-    </div>
-  </section>
 
-  <!-- ── Security ─────────────────────────── -->
-  <section class="tab" id="tab-security">
-    <div class="grid">
-      <div class="card">
-        <h3>Logged in to the server right now (SSH)</h3>
-        <pre class="out" id="secSessions" style="max-height:160px"></pre>
-        <h3 style="margin-top:14px">Recent logins</h3>
-        <pre class="out" id="secLogins" style="max-height:220px"></pre>
-      </div>
-      <div class="card">
-        <h3>Blocked IPs (wrong panel password)</h3>
-        <table><thead><tr><th scope="col">IP</th><th scope="col">Wrong tries</th><th scope="col">Since</th><th scope="col"></th></tr></thead>
-          <tbody id="secLockouts"></tbody></table>
-        <p class="muted">An IP is blocked for 15 minutes after 10 wrong passwords.</p>
-      </div>
-    </div>
-    <div class="card">
-      <h3>Audit log: every change made through this panel</h3>
-      <table><thead><tr><th scope="col">Time</th><th scope="col">IP</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
-        <tbody id="secAudit"></tbody></table>
-    </div>
-  </section>
+      <div class="pill-tabs" id="nav"></div>
 
-  <!-- ── Settings ─────────────────────────── -->
-  <section class="tab" id="tab-settings">
-    <div class="grid">
-      <div class="card">
-        <h3>Alert notifications</h3>
-        <p class="muted">Paste a Discord or Slack webhook URL to get a message when something goes down, and again when it's fixed.</p>
-        <input id="setWebhook" placeholder="https://discord.com/api/webhooks/…" style="width:100%">
-        <div class="row" style="margin-top:8px"><button type="button" class="b-grey" onclick="testWebhook()">🔔 Send test alert</button></div>
-        <h3 style="margin-top:16px">Alert when above (%)</h3>
-        <div class="form">
-          <label for="setCpu">CPU (1 min avg)</label><input id="setCpu" type="number" min="10" max="100">
-          <label for="setMem">Memory</label><input id="setMem" type="number" min="10" max="100">
-          <label for="setDisk">Disk</label><input id="setDisk" type="number" min="10" max="100">
+      <!-- ── Overview ─────────────────────────── -->
+      <section class="tab active" id="tab-overview">
+        <div id="alertBanner"></div>
+
+        <div class="hero-row">
+          <div class="usage-card tint-lavender">
+            <div class="usage-head">
+              <span class="circle-ic"><svg class="ic"><use href="#i-memory"/></svg></span>
+              <h2>Memory</h2>
+              <span class="badge-dark" id="memBadge">–</span>
+            </div>
+            <div class="usage-num"><b id="memVal">–</b><span id="memTotal"></span></div>
+            <div class="blocks" id="memBlocks"></div>
+          </div>
+          <div class="usage-card tint-blue">
+            <div class="usage-head">
+              <span class="circle-ic"><svg class="ic"><use href="#i-disk"/></svg></span>
+              <h2>Disk</h2>
+              <span class="badge-dark" id="diskBadge">–</span>
+            </div>
+            <div class="usage-num"><b id="diskVal">–</b><span id="diskTotal"></span></div>
+            <div class="blocks blue" id="diskBlocks"></div>
+          </div>
+          <div class="promo-card" id="promoCard">
+            <div class="promo-top">
+              <h2 id="promoTitle">Keep Your Server Healthy</h2>
+              <svg class="promo-logo" viewBox="0 0 48 48" aria-hidden="true">
+                <defs>
+                  <linearGradient id="pg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#22c55e"/></linearGradient>
+                  <linearGradient id="pg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+                  <linearGradient id="pg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#f97316"/></linearGradient>
+                </defs>
+                <rect x="6" y="8" width="16" height="30" rx="8" transform="rotate(25 14 23)" fill="url(#pg1)"/>
+                <rect x="18" y="6" width="16" height="30" rx="8" transform="rotate(25 26 21)" fill="url(#pg2)"/>
+                <rect x="24" y="14" width="16" height="28" rx="8" transform="rotate(25 32 28)" fill="url(#pg3)"/>
+              </svg>
+            </div>
+            <p id="promoText">Checking your server…</p>
+            <button type="button" class="b-white" id="promoBtn" onclick="showTab('projects')"><span>Open projects</span><svg class="ic"><use href="#i-play-o"/></svg></button>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <h3>Quick commands (Activity tab)</h3>
-        <p class="muted">One per line: <code>Button name | command</code></p>
-        <textarea id="setQuick" rows="12" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <button type="button" class="b-green" onclick="saveSettings()">💾 Save settings</button>
-  </section>
-</main>
+
+        <div class="mini-tiles">
+          <div class="mini"><span class="circle-ic sm"><svg class="ic"><use href="#i-cpu"/></svg></span><div><small>CPU load</small><b id="cpuVal">–</b></div><div class="bar"><div id="cpuBar"></div></div></div>
+          <div class="mini"><span class="circle-ic sm"><svg class="ic"><use href="#i-swap"/></svg></span><div><small>Swap</small><b id="swapVal">–</b></div><div class="bar"><div id="swapBar"></div></div></div>
+          <div class="mini"><span class="circle-ic sm"><svg class="ic"><use href="#i-clock"/></svg></span><div><small>Uptime</small><b id="upVal">–</b><em id="osVal"></em></div></div>
+          <div class="mini"><span class="circle-ic sm"><svg class="ic"><use href="#i-box"/></svg></span><div><small>Projects online</small><b id="projVal">–</b><em id="projSub"></em></div></div>
+        </div>
+
+        <div class="stats-row">
+          <div class="soft-card stats-card">
+            <div class="card-head">
+              <h2>Statistics</h2>
+              <div class="chips" id="chartTabs">
+                <button type="button" data-metric="load" class="active"><i class="c-a"></i>CPU · Memory</button>
+                <button type="button" data-metric="net"><i class="c-b"></i>Network</button>
+              </div>
+              <span class="spacer"></span>
+              <select id="chartRange" class="pill-select" onchange="drawCharts()">
+                <option value="90">15 min</option><option value="360" selected>1 hour</option><option value="720">2 hours</option>
+              </select>
+            </div>
+            <div class="chart-inner">
+              <div class="chart-legend" id="chartLegend"></div>
+              <div class="chart-box"><canvas id="mainChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="soft-card reco-card">
+            <div class="card-head">
+              <h2>Recommended for you</h2>
+              <span class="spacer"></span>
+              <div class="pager" id="recoDots"></div>
+            </div>
+            <div class="reco-grid" id="recoGrid"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Project Health</h2>
+            <span class="spacer"></span>
+            <button type="button" class="b-ghost" onclick="showTab('projects')">View all <svg class="ic"><use href="#i-chevron-right"/></svg></button>
+          </div>
+          <div class="table-wrap">
+            <table class="health">
+              <thead><tr><th scope="col">Project</th><th scope="col">Status</th><th scope="col">Restarts</th><th scope="col">CPU</th><th scope="col">Memory share</th></tr></thead>
+              <tbody id="healthTable"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Server actions</h2></div>
+          <div id="serverNotices"></div>
+          <div class="row">
+            <button type="button" class="b-primary" onclick="serverAction('pm2-save', 'Save the current PM2 process list (so it comes back after reboot)?')"><svg class="ic"><use href="#i-save"/></svg>Save PM2 list</button>
+            <button type="button" class="b-lime" id="swapBtn" onclick="serverAction('swap', 'Create a 2 GB swap file? Gives the server extra memory room so apps do not crash when RAM is full.')"><svg class="ic"><use href="#i-swap"/></svg>Create 2 GB swap</button>
+            <button type="button" class="b-grey" onclick="serverAction('clean-logs', 'Clear all PM2 logs and trim system logs to 100 MB?')"><svg class="ic"><use href="#i-broom"/></svg>Clean logs</button>
+            <button type="button" class="b-orange" onclick="serverAction('update', 'Install all Ubuntu package updates? This can take several minutes.')"><svg class="ic"><use href="#i-download"/></svg>Update packages</button>
+            <button type="button" class="b-red" onclick="serverAction('reboot', 'REBOOT the whole server? Every app goes down for ~1 minute, then PM2 starts them again.')"><svg class="ic"><use href="#i-power"/></svg>Reboot server</button>
+          </div>
+          <p class="muted small">"Stop instance" is left out on purpose: a stopped EC2 instance can only be started again from the AWS console.</p>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <div class="card-head"><h2>Top processes</h2></div>
+            <div class="table-wrap">
+              <table><thead><tr><th scope="col">PID</th><th scope="col">User</th><th scope="col">CPU</th><th scope="col">Mem</th><th scope="col">Time</th><th scope="col">Command</th><th scope="col"></th></tr></thead>
+                <tbody id="procTable"></tbody></table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Open ports</h2></div>
+            <div class="table-wrap">
+              <table><thead><tr><th scope="col">Port</th><th scope="col">Address</th><th scope="col">Process</th></tr></thead>
+                <tbody id="portTable"></tbody></table>
+            </div>
+            <p class="muted small">A port also has to be allowed in the AWS security group to be reachable from the internet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Projects ─────────────────────────── -->
+      <section class="tab" id="tab-projects">
+        <div class="toolbar">
+          <button type="button" class="b-primary" onclick="openAddProject()"><svg class="ic"><use href="#i-plus"/></svg>Add project</button>
+          <button type="button" class="b-grey" onclick="loadProjects()"><svg class="ic"><use href="#i-refresh"/></svg>Refresh</button>
+          <button type="button" class="b-grey" onclick="openBackups()"><svg class="ic"><use href="#i-save"/></svg>Backups</button>
+          <span class="muted">Every app running under PM2 shows up here.</span>
+        </div>
+        <div class="cards" id="projectList"><p class="muted">Loading…</p></div>
+      </section>
+
+      <!-- ── Code editor ──────────────────────── -->
+      <section class="tab" id="tab-code">
+        <div class="ide" id="ide">
+          <div class="ide-bar">
+            <button type="button" class="icon-btn mobile-only" onclick="document.getElementById('ide').classList.toggle('show-side')" title="Show files" aria-label="Show files"><svg class="ic"><use href="#i-sidebar"/></svg></button>
+            <select id="codeProject" class="pill-select" onchange="setCodeRoot(this.value)" title="Project"></select>
+            <div class="ide-actions">
+              <button type="button" class="b-grey" onclick="quickOpen()" title="Go to file (Ctrl+P)"><svg class="ic"><use href="#i-search"/></svg><span>Go to file</span><kbd>Ctrl P</kbd></button>
+              <button type="button" class="b-grey" onclick="openFindInFiles()" title="Find in files (Ctrl+Shift+F)"><svg class="ic"><use href="#i-filter"/></svg><span>Find in files</span></button>
+              <button type="button" class="b-grey" onclick="toggleIdeTerminal()" title="Terminal in this project (Ctrl+`)"><svg class="ic"><use href="#i-terminal"/></svg><span>Terminal</span></button>
+              <button type="button" class="b-grey" onclick="downloadProject()" title="Download the project as .tar.gz (without node_modules and .git)"><svg class="ic"><use href="#i-download"/></svg><span>Download</span></button>
+              <span class="sep"></span>
+              <button type="button" class="b-lime" onclick="saveActiveCode()" title="Save (Ctrl+S)"><svg class="ic"><use href="#i-save"/></svg><span>Save</span></button>
+              <button type="button" class="b-grey" onclick="saveAllCode()" title="Save all (Ctrl+Alt+S)"><svg class="ic"><use href="#i-layers"/></svg><span>Save all</span></button>
+              <button type="button" class="b-orange" onclick="saveAndRestart()" title="Save all and restart the app"><svg class="ic"><use href="#i-rotate"/></svg><span>Save &amp; restart</span></button>
+              <button type="button" class="b-primary" onclick="openChanges()" title="See what changed and push to GitHub"><svg class="ic"><use href="#i-git"/></svg><span>Changes</span><span class="count" id="changeCount" hidden>0</span></button>
+            </div>
+          </div>
+          <div class="ide-body">
+            <div class="ide-side" id="ideSide">
+              <div class="ide-side-head">
+                <span id="codeRootName">Explorer</span>
+                <span class="spacer"></span>
+                <button type="button" class="icon-btn sm" onclick="treeNew('file')" title="New file" aria-label="New file"><svg class="ic"><use href="#i-file-plus"/></svg></button>
+                <button type="button" class="icon-btn sm" onclick="treeNew('folder')" title="New folder" aria-label="New folder"><svg class="ic"><use href="#i-folder-plus"/></svg></button>
+                <button type="button" class="icon-btn sm" onclick="$('ideUploadFolder').click()" title="Upload a folder" aria-label="Upload a folder"><svg class="ic"><use href="#i-upload"/></svg></button>
+                <input type="file" id="ideUploadFolder" webkitdirectory multiple hidden onchange="uploadPicked(this.files, codeRoot); this.value=''">
+                <button type="button" class="icon-btn sm" onclick="refreshTree()" title="Refresh" aria-label="Refresh"><svg class="ic"><use href="#i-refresh"/></svg></button>
+                <button type="button" class="icon-btn sm" onclick="collapseTree()" title="Collapse all" aria-label="Collapse all"><svg class="ic"><use href="#i-collapse"/></svg></button>
+              </div>
+              <div class="tree-filter"><svg class="ic"><use href="#i-search"/></svg><input id="treeFilter" placeholder="Filter files…" oninput="filterTree()"></div>
+              <div class="code-tree" id="codeTree" title="Drag files or whole folders here to upload them"><p class="muted pad">Loading editor…</p></div>
+            </div>
+            <div class="ide-main">
+              <div class="code-tabs" id="codeTabs"></div>
+              <div class="crumbs-bar" id="codeCrumbs"></div>
+              <div class="editor-host">
+                <div id="codeEditor"></div>
+                <div class="editor-empty" id="editorEmpty">
+                  <svg class="brand-mark big" viewBox="0 0 40 40" aria-hidden="true">
+                    <path d="M20 4a16 16 0 1 0 15.6 19.6" fill="none" stroke="var(--lime)" stroke-width="4.5" stroke-linecap="round"/>
+                    <path d="M13 22c4-1 9-5 13-11" fill="none" stroke="var(--text)" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="29" cy="9" r="3.2" fill="var(--lime)"/>
+                  </svg>
+                  <div class="kbd-list">
+                    <div><span>Go to file</span><kbd>Ctrl P</kbd></div>
+                    <div><span>Find in files</span><kbd>Ctrl Shift F</kbd></div>
+                    <div><span>Save</span><kbd>Ctrl S</kbd></div>
+                    <div><span>Format document</span><kbd>Shift Alt F</kbd></div>
+                    <div><span>Command palette</span><kbd>F1</kbd></div>
+                  </div>
+                </div>
+              </div>
+              <div class="ide-term" id="ideTermPanel" hidden>
+                <div class="ide-term-head">
+                  <span class="ide-term-title"><svg class="ic"><use href="#i-terminal"/></svg>TERMINAL<b id="ideTermCwd"></b></span>
+                  <span class="spacer"></span>
+                  <button type="button" onclick="ideRun('npm install')" title="Install packages"><svg class="ic"><use href="#i-package"/></svg>npm install</button>
+                  <button type="button" onclick="ideRun('npm run build')" title="Build"><svg class="ic"><use href="#i-hammer"/></svg>build</button>
+                  <button type="button" onclick="ideRun('git pull')" title="Pull from GitHub"><svg class="ic"><use href="#i-git"/></svg>git pull</button>
+                  <button type="button" onclick="ideRestartApp()" title="Restart this project in PM2"><svg class="ic"><use href="#i-rotate"/></svg>restart app</button>
+                  <button type="button" onclick="ideDeploy()" title="Pull, install and reload (same as Deploy)"><svg class="ic"><use href="#i-rocket"/></svg>redeploy</button>
+                  <span class="sep"></span>
+                  <button type="button" class="icon" onclick="ideTermClear()" title="Clear" aria-label="Clear"><svg class="ic"><use href="#i-broom"/></svg></button>
+                  <button type="button" class="icon" onclick="ideTermNew()" title="New session" aria-label="New session"><svg class="ic"><use href="#i-plus"/></svg></button>
+                  <button type="button" class="icon" onclick="ideTermMax()" title="Maximize" aria-label="Maximize"><svg class="ic"><use href="#i-maximize"/></svg></button>
+                  <button type="button" class="icon" onclick="toggleIdeTerminal(false)" title="Hide" aria-label="Hide"><svg class="ic"><use href="#i-x"/></svg></button>
+                </div>
+                <div class="ide-term-body" id="ideTerm"></div>
+              </div>
+              <div class="statusbar" id="statusBar">
+                <span id="sbBranch"><svg class="ic"><use href="#i-git"/></svg><b>–</b></span>
+                <span id="sbProblems"></span>
+                <span class="spacer"></span>
+                <span id="sbCursor"></span>
+                <span id="sbLang"></span>
+                <span>UTF-8</span>
+                <button type="button" onclick="toggleIdeTerminal()" title="Terminal (Ctrl+`)">Terminal</button>
+                <button type="button" onclick="toggleEditorOpt('wordWrap')" id="sbWrap" title="Word wrap (Alt+Z)">Wrap</button>
+                <button type="button" onclick="toggleEditorOpt('minimap')" id="sbMinimap" title="Minimap">Minimap</button>
+                <button type="button" onclick="formatCode()" title="Format document (Shift+Alt+F)">Format</button>
+                <button type="button" onclick="zoomEditor(-1)" title="Smaller font">A−</button>
+                <button type="button" onclick="zoomEditor(1)" title="Bigger font">A+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="muted small">Saving changes the live server only, and the next deploy replaces it with GitHub's version.
+          Use <b>Changes</b> → <b>Commit &amp; push</b> to keep your edits (pushing also deploys them).</p>
+      </section>
+
+      <!-- ── Monitors ─────────────────────────── -->
+      <section class="tab" id="tab-monitors">
+        <div class="toolbar">
+          <button type="button" class="b-primary" onclick="openMonitorForm()"><svg class="ic"><use href="#i-plus"/></svg>Add monitor</button>
+          <button type="button" class="b-grey" onclick="loadMonitors()"><svg class="ic"><use href="#i-refresh"/></svg>Refresh</button>
+          <span class="muted">Checks a URL on a schedule. With auto-heal, a project that stops answering is restarted for you.</span>
+        </div>
+        <div class="cards" id="monitorList"><p class="muted">Loading…</p></div>
+      </section>
+
+      <!-- ── Terminal ─────────────────────────── -->
+      <section class="tab" id="tab-terminal">
+        <div class="card term-card">
+          <div class="card-head">
+            <span class="traffic"><i></i><i></i><i></i></span>
+            <h2 class="mono-title">ubuntu@server</h2>
+            <span class="spacer"></span>
+            <span class="muted" id="termStatus">Not connected</span>
+            <button type="button" class="b-grey" onclick="newTerminal()"><svg class="ic"><use href="#i-plus"/></svg>New session</button>
+          </div>
+          <div id="terminal"></div>
+        </div>
+        <p class="muted small">Click inside the terminal, then paste with Ctrl+V (or Ctrl+Shift+V).</p>
+      </section>
+
+      <!-- ── Logs ─────────────────────────────── -->
+      <section class="tab" id="tab-logs">
+        <div class="card">
+          <div class="row">
+            <select id="logProject" class="pill-select"></select>
+            <div class="seg small" id="logTypeSeg">
+              <button type="button" data-type="out" class="active">Output</button>
+              <button type="button" data-type="err">Errors</button>
+            </div>
+            <select id="logType" hidden><option value="out">Output</option><option value="err">Errors</option></select>
+            <select id="logLines" class="pill-select"><option>100</option><option selected>300</option><option>1000</option><option>3000</option></select>
+            <button type="button" class="b-primary" onclick="loadLogs()"><svg class="ic"><use href="#i-download"/></svg>Load</button>
+            <button type="button" class="b-lime" id="followBtn" onclick="toggleFollow()"><svg class="ic"><use href="#i-play"/></svg>Live</button>
+            <button type="button" class="b-grey" onclick="document.getElementById('logOut').textContent=''">Clear view</button>
+            <button type="button" class="b-grey" onclick="downloadLogs()"><svg class="ic"><use href="#i-download"/></svg>Download</button>
+            <div class="input-ic grow"><svg class="ic"><use href="#i-filter"/></svg><input id="logFilter" placeholder="Filter text…" oninput="renderLogs()"></div>
+          </div>
+          <pre class="out logs-out" id="logOut">Pick a project and click Load or Live.</pre>
+        </div>
+      </section>
+
+      <!-- ── Files ────────────────────────────── -->
+      <section class="tab" id="tab-files">
+        <div class="card" id="filesCard">
+          <div class="row">
+            <button type="button" class="icon-btn" id="backBtn" onclick="goBack()" title="Back" aria-label="Back"><svg class="ic"><use href="#i-arrow-left"/></svg></button>
+            <button type="button" class="icon-btn" onclick="goUp()" title="Parent folder" aria-label="Parent folder"><svg class="ic"><use href="#i-arrow-up"/></svg></button>
+            <button type="button" class="icon-btn" onclick="browse(homeDir)" title="Home folder" aria-label="Home folder"><svg class="ic"><use href="#i-home"/></svg></button>
+            <div class="input-ic grow"><svg class="ic"><use href="#i-folder"/></svg>
+              <input id="pathInput" class="mono" onkeydown="if(event.key==='Enter')browse(this.value)" title="Type a path and press Enter"></div>
+            <button type="button" class="icon-btn" onclick="browse(currentDir, false)" title="Refresh" aria-label="Refresh"><svg class="ic"><use href="#i-refresh"/></svg></button>
+          </div>
+          <div class="row mt">
+            <span class="crumbs" id="crumbs"></span>
+            <span class="spacer"></span>
+            <div class="input-ic"><svg class="ic"><use href="#i-filter"/></svg><input id="fileFilter" placeholder="Filter…" oninput="renderFiles()"></div>
+            <label class="check"><input type="checkbox" id="showHidden" onchange="renderFiles()"><span>Hidden</span></label>
+            <button type="button" class="b-grey" onclick="newFile()"><svg class="ic"><use href="#i-file-plus"/></svg>New file</button>
+            <button type="button" class="b-grey" onclick="newFolder()"><svg class="ic"><use href="#i-folder-plus"/></svg>New folder</button>
+            <button type="button" class="b-grey" id="pasteBtn" onclick="pasteInto(currentDir)" hidden><svg class="ic"><use href="#i-paste"/></svg>Paste</button>
+            <button type="button" class="b-grey" onclick="downloadFolder(currentDir)"><svg class="ic"><use href="#i-download"/></svg>Download folder</button>
+            <button type="button" class="b-grey" onclick="$('uploadFolderInput').click()"><svg class="ic"><use href="#i-folder-plus"/></svg>Upload folder</button>
+            <button type="button" class="b-primary" onclick="$('uploadInput').click()"><svg class="ic"><use href="#i-upload"/></svg>Upload files</button>
+            <input type="file" id="uploadFolderInput" webkitdirectory multiple hidden onchange="uploadPicked(this.files, currentDir); this.value=''">
+            <button type="button" class="b-grey" onclick="terminalHere()"><svg class="ic"><use href="#i-terminal"/></svg>Terminal here</button>
+            <input type="file" id="uploadInput" multiple hidden onchange="uploadFiles(this.files); this.value=''">
+          </div>
+          <div class="table-wrap mt">
+            <table class="files"><thead><tr><th scope="col">Name</th><th scope="col">Size</th><th scope="col">Modified</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="fileTable"></tbody></table>
+          </div>
+          <p class="muted small">Tip: drag &amp; drop files <b>or whole folders</b> onto this card to upload them into the current folder (node_modules and .git are skipped).</p>
+        </div>
+      </section>
+
+      <!-- ── Services ─────────────────────────── -->
+      <section class="tab" id="tab-services">
+        <div class="card">
+          <div class="table-wrap">
+            <table><thead><tr><th scope="col">Service</th><th scope="col">Description</th><th scope="col">State</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="serviceTable"></tbody></table>
+          </div>
+          <p class="muted small">Only services installed on this server are listed. ssh and PM2 startup can't be stopped from here, because that would lock you out.</p>
+        </div>
+      </section>
+
+      <!-- ── Redis ────────────────────────────── -->
+      <section class="tab" id="tab-redis">
+        <div class="tiles" id="redisTiles"></div>
+        <div class="card">
+          <div class="row">
+            <div class="input-ic grow"><svg class="ic"><use href="#i-search"/></svg>
+              <input id="redisPattern" class="mono" value="*" onkeydown="if(event.key==='Enter')loadRedisKeys()" title="Pattern, e.g. user:* or *session*"></div>
+            <button type="button" class="b-primary" onclick="loadRedisKeys()"><svg class="ic"><use href="#i-search"/></svg>Search keys</button>
+            <button type="button" class="b-lime" onclick="openRedisSet()"><svg class="ic"><use href="#i-plus"/></svg>Set key</button>
+            <button type="button" class="b-red" onclick="flushRedis()"><svg class="ic"><use href="#i-trash"/></svg>Delete all keys</button>
+          </div>
+          <div class="table-wrap mt">
+            <table><thead><tr><th scope="col">Key</th><th scope="col">Type</th><th scope="col">Expires in</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="redisKeys"><tr><td colspan="4" class="muted">Click "Search keys".</td></tr></tbody></table>
+          </div>
+          <p class="muted small" id="redisNote"></p>
+        </div>
+      </section>
+
+      <!-- ── Cron ─────────────────────────────── -->
+      <section class="tab" id="tab-cron">
+        <div class="grid">
+          <div class="card">
+            <div class="card-head"><h2>Crontab of <span id="cronUser">this user</span></h2></div>
+            <textarea id="cronText" class="mono" rows="16" spellcheck="false" placeholder="# minute hour day month weekday  command"></textarea>
+            <div class="row mt">
+              <button type="button" class="b-lime" onclick="saveCron()"><svg class="ic"><use href="#i-save"/></svg>Save crontab</button>
+              <button type="button" class="b-grey" onclick="loadCron()"><svg class="ic"><use href="#i-refresh"/></svg>Reload</button>
+              <span class="muted" id="cronInfo"></span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Examples</h2><span class="muted">click to add</span></div>
+            <div id="cronExamples"></div>
+            <p class="muted small">Format: <code>minute hour day-of-month month weekday command</code>. Times are in the server's timezone (UTC on EC2).
+              Send output to a file (<code>&gt;&gt; ~/cron.log 2&gt;&amp;1</code>) so you can read it in Files.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Activity ─────────────────────────── -->
+      <section class="tab" id="tab-activity">
+        <div class="card">
+          <div class="card-head"><h2>Run a command</h2></div>
+          <div class="row">
+            <div class="input-ic grow"><svg class="ic"><use href="#i-terminal"/></svg>
+              <input id="runCmd" class="mono" placeholder="e.g. df -h" onkeydown="if(event.key==='Enter')runCommand()"></div>
+            <div class="input-ic"><svg class="ic"><use href="#i-folder"/></svg><input id="runCwd" class="mono" placeholder="Folder (default: home)"></div>
+            <button type="button" class="b-primary" onclick="runCommand()"><svg class="ic"><use href="#i-play"/></svg>Run</button>
+          </div>
+          <div class="row mt" id="quickCmds"></div>
+          <p class="muted small">For interactive programs (nano, top, prompts) use the Terminal. Edit the quick buttons in Settings.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Activity</h2><span class="muted">Every action runs here with its live output</span></div>
+          <div id="jobList"></div>
+        </div>
+      </section>
+
+      <!-- ── Security ─────────────────────────── -->
+      <section class="tab" id="tab-security">
+        <div class="grid">
+          <div class="card">
+            <div class="card-head"><h2>Logged in over SSH</h2></div>
+            <pre class="out short" id="secSessions"></pre>
+            <div class="card-head mt"><h2>Recent logins</h2></div>
+            <pre class="out" id="secLogins"></pre>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Blocked IPs</h2><span class="muted">wrong panel password</span></div>
+            <div class="table-wrap">
+              <table><thead><tr><th scope="col">IP</th><th scope="col">Wrong tries</th><th scope="col">Since</th><th scope="col"></th></tr></thead>
+                <tbody id="secLockouts"></tbody></table>
+            </div>
+            <p class="muted small">An IP is blocked for 15 minutes after 10 wrong passwords.</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Audit log</h2><span class="muted">every change made through this panel</span></div>
+          <div class="table-wrap">
+            <table><thead><tr><th scope="col">Time</th><th scope="col">IP</th><th scope="col">Action</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
+              <tbody id="secAudit"></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Settings ─────────────────────────── -->
+      <section class="tab" id="tab-settings">
+        <div class="grid">
+          <div class="card">
+            <div class="card-head"><h2>Alert notifications</h2></div>
+            <p class="muted">Paste a Discord or Slack webhook URL to get a message when something goes down, and again when it's fixed.</p>
+            <div class="input-ic"><svg class="ic"><use href="#i-bell"/></svg><input id="setWebhook" placeholder="https://discord.com/api/webhooks/…"></div>
+            <div class="row mt"><button type="button" class="b-grey" onclick="testWebhook()"><svg class="ic"><use href="#i-bell"/></svg>Send test alert</button></div>
+            <div class="card-head mt"><h2>Alert when above (%)</h2></div>
+            <div class="form">
+              <label for="setCpu">CPU (1 min avg)</label><input id="setCpu" type="number" min="10" max="100">
+              <label for="setMem">Memory</label><input id="setMem" type="number" min="10" max="100">
+              <label for="setDisk">Disk</label><input id="setDisk" type="number" min="10" max="100">
+            </div>
+            <div class="card-head mt"><h2>Auto-lock</h2><span class="muted">this browser</span></div>
+            <div class="form">
+              <label for="setLock">Lock after (minutes)</label><input id="setLock" type="number" min="0" max="1440" placeholder="0 = never">
+            </div>
+            <p class="muted small">After this long without using the page, the panel locks and asks for the password again.</p>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Quick commands</h2><span class="muted">shown in Activity</span></div>
+            <p class="muted">One per line: <code>Button name | command</code></p>
+            <textarea id="setQuick" class="mono" rows="12" spellcheck="false"></textarea>
+          </div>
+        </div>
+        <button type="button" class="b-lime" onclick="saveSettings()"><svg class="ic"><use href="#i-save"/></svg>Save settings</button>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- search overlay (Ctrl+K) -->
+<div class="search-overlay" id="searchOverlay" onmousedown="if(event.target===this)closeSearch()">
+  <div class="search" id="searchBox">
+    <svg class="ic"><use href="#i-search"/></svg>
+    <input id="globalSearch" type="search" placeholder="Search pages, projects, actions…" autocomplete="off"
+           oninput="renderSearch()" onkeydown="searchKey(event)">
+    <kbd>Esc</kbd>
+    <div class="search-results show" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- upload progress -->
+<div class="upload-panel" id="uploadPanel" hidden>
+  <div class="row"><b id="uploadTitle">Uploading…</b><span class="spacer"></span><span class="muted small" id="uploadCount"></span></div>
+  <div class="bar"><div id="uploadBar"></div></div>
+  <div class="muted small" id="uploadFile"></div>
+</div>
 
 <!-- generic modal -->
 <div class="overlay" id="modal">
   <div class="modal">
-    <div class="mh"><h3 id="modalTitle"></h3><button type="button" class="b-ghost" onclick="closeModal()">✕</button></div>
+    <div class="mh"><h3 id="modalTitle"></h3><button type="button" class="icon-btn" onclick="closeModal()" title="Close" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></div>
     <div class="mb" id="modalBody"></div>
     <div class="mf" id="modalFoot"></div>
   </div>
 </div>
 
 <!-- login -->
-<div class="overlay" id="login">
+<div class="overlay login" id="login">
   <div class="modal">
-    <div class="mh"><h3>🔐 Log in</h3></div>
-    <div class="mb">
-      <p class="muted">Enter the OPS_TOKEN from the server's .env file.</p>
-      <input id="tokenInput" type="password" autocomplete="current-password" style="width:100%" placeholder="Ops token" onkeydown="if(event.key==='Enter')login()">
-      <p class="down" id="loginErr" style="font-size:13px"></p>
+    <div class="login-brand">
+      <svg class="brand-mark big" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M20 4a16 16 0 1 0 15.6 19.6" fill="none" stroke="var(--lime)" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M13 22c4-1 9-5 13-11" fill="none" stroke="var(--text)" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="29" cy="9" r="3.2" fill="var(--lime)"/>
+      </svg>
+      <span class="brand-name"><b>Ops</b>Edge</span>
     </div>
-    <div class="mf"><button type="button" class="b-blue" onclick="login()">Log in</button></div>
+    <div class="mb">
+      <h3>Welcome back</h3>
+      <p class="muted">Enter the OPS_TOKEN from the server's .env file.</p>
+      <div class="input-ic"><svg class="ic"><use href="#i-key"/></svg>
+        <input id="tokenInput" type="password" autocomplete="current-password" placeholder="Ops token" onkeydown="if(event.key==='Enter')login()"></div>
+      <p class="down small" id="loginErr"></p>
+      <button type="button" class="b-primary wide" onclick="login()">Log in</button>
+    </div>
   </div>
 </div>
 
@@ -447,1346 +633,9 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
-<script>
-  const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // value → JS literal safe inside an onclick="…" attribute
-  const js = (v) => esc(JSON.stringify(v));
-  const token = () => localStorage.getItem('opsAgentToken') || '';
-
-  // ── formatting ──────────────────────────
-  const fmtBytes = (b) => {
-    if (!b) return '0 B';
-    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.min(4, Math.floor(Math.log(b) / Math.log(1024)));
-    return (b / 1024 ** i).toFixed(i ? 1 : 0) + ' ' + u[i];
-  };
-  const fmtDur = (sec) => {
-    sec = Math.max(0, Math.round(sec));
-    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
-    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${sec % 60}s` : `${sec}s`;
-  };
-  const setBar = (id, pct) => {
-    $(id).style.width = Math.min(100, pct).toFixed(0) + '%';
-    $(id).className = pct > 85 ? 'hot' : pct > 65 ? 'mid' : '';
-  };
-
-  // ── API ─────────────────────────────────
-  async function api(path, { method = 'GET', body } = {}) {
-    const res = await fetch('/api' + path, {
-      method,
-      headers: { 'Content-Type': 'application/json', 'x-ops-token': token() },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
-    if (res.status === 401) { showLogin(data.message); throw new Error(data.message); }
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-    return data;
-  }
-
-  function toast(msg, type = '') {
-    const el = document.createElement('div');
-    el.className = 'toast ' + type;
-    el.textContent = msg;
-    $('toasts').appendChild(el);
-    setTimeout(() => el.remove(), 5000);
-  }
-
-  // Runs an action; on success shows a toast and points to the Activity tab.
-  async function act(path, body, confirmText) {
-    if (confirmText && !confirm(confirmText)) return;
-    try {
-      const r = await api(path, { method: 'POST', body });
-      toast(r.message + ' — see Activity', 'ok');
-      return r;
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── modal ───────────────────────────────
-  function openModal(title, bodyHtml, footHtml = '') {
-    $('modalTitle').textContent = title;
-    $('modalBody').innerHTML = bodyHtml;
-    $('modalFoot').innerHTML = footHtml + '<button type="button" class="b-grey" onclick="closeModal()">Close</button>';
-    $('modal').classList.add('show');
-  }
-  function closeModal() { $('modal').classList.remove('show'); }
-
-  // ── login ───────────────────────────────
-  function showLogin(msg = '') {
-    $('loginErr').textContent = msg;
-    $('login').classList.add('show');
-    setTimeout(() => $('tokenInput').focus(), 50);
-  }
-  async function login() {
-    localStorage.setItem('opsAgentToken', $('tokenInput').value.trim());
-    try {
-      await api('/system');
-      $('login').classList.remove('show');
-      start();
-    } catch (err) { $('loginErr').textContent = err.message; }
-  }
-  function logout() {
-    localStorage.removeItem('opsAgentToken');
-    location.reload();
-  }
-
-  // ── tabs ────────────────────────────────
-  let activeTab = 'overview';
-  $('nav').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-tab]');
-    if (btn) showTab(btn.dataset.tab);
-  });
-  function showTab(name) {
-    activeTab = name;
-    document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + name));
-    if (name === 'overview') loadSystem();
-    if (name === 'projects') loadProjects();
-    if (name === 'services') loadServices();
-    if (name === 'files' && !currentDir) browse('');
-    if (name === 'logs') fillLogProjects();
-    if (name === 'terminal') { if (!termSocket) newTerminal(); else setTimeout(fitTerm, 30); }
-    if (name === 'overview') setTimeout(drawCharts, 30);
-    if (name === 'monitors') loadMonitors();
-    if (name === 'code') initCode();
-    if (name === 'redis') loadRedisInfo();
-    if (name === 'cron') loadCron();
-    if (name === 'security') loadSecurity();
-    if (name === 'settings') loadSettings();
-    if (name === 'activity') renderQuickCmds();
-  }
-
-  // ── overview ────────────────────────────
-  async function loadSystem() {
-    try {
-      const s = await api('/system');
-      $('connDot').className = 'dot on';
-      $('hostInfo').textContent = `${s.hostname} · ${s.user} · Node ${s.node}`;
-      const load = s.loadAvg[0];
-      $('cpuVal').textContent = `${load.toFixed(2)} / ${s.cpus} CPU`;
-      setBar('cpuBar', (load / s.cpus) * 100);
-      const used = s.memory.totalBytes - s.memory.freeBytes;
-      $('memVal').textContent = `${fmtBytes(used)} / ${fmtBytes(s.memory.totalBytes)}`;
-      setBar('memBar', (used / s.memory.totalBytes) * 100);
-      if (s.disk) {
-        $('diskVal').textContent = `${fmtBytes(s.disk.usedBytes)} / ${fmtBytes(s.disk.totalBytes)}`;
-        setBar('diskBar', (s.disk.usedBytes / s.disk.totalBytes) * 100);
-      }
-      $('upVal').textContent = fmtDur(s.uptimeSec);
-      $('osVal').textContent = s.platform;
-
-      if (s.swap?.totalBytes) {
-        const swapUsed = s.swap.totalBytes - s.swap.freeBytes;
-        $('swapVal').textContent = `${fmtBytes(swapUsed)} / ${fmtBytes(s.swap.totalBytes)}`;
-        setBar('swapBar', (swapUsed / s.swap.totalBytes) * 100);
-        $('swapBtn').hidden = true;
-      } else {
-        $('swapVal').innerHTML = '<span class="warn">none</span>';
-        $('swapBtn').hidden = false;
-      }
-      const notices = [];
-      if (!s.swap?.totalBytes && s.memory.totalBytes < 2 * 1024 ** 3) {
-        notices.push(['warn', '⚠️ No swap and less than 2 GB RAM: if memory fills up, Linux kills your apps. Click "Create 2 GB swap".']);
-      }
-      if (s.rebootRequired) notices.push(['warn', '🔁 Updates were installed that need a reboot to take effect.']);
-      if (s.updates?.total) {
-        notices.push([s.updates.security ? 'warn' : 'info',
-          `⬆️ ${s.updates.total} package update(s) available${s.updates.security ? `, ${s.updates.security} of them security fixes` : ''}.`]);
-      }
-      $('serverNotices').innerHTML = notices.map(([cls, text]) => `<div class="notice ${cls}">${esc(text)}</div>`).join('');
-
-      $('procTable').innerHTML = s.processes.map((p) => `<tr>
-        <td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}</td><td>${p.mem}</td><td>${esc(p.elapsed)}</td><td title="${esc(p.command)}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:Consolas,monospace">${esc(p.command)}</td>
-        <td><button type="button" class="b-red" onclick="killProc(${p.pid}, ${js(p.command)})">Kill</button></td></tr>`).join('');
-      $('portTable').innerHTML = s.ports.map((p) => `<tr><td><b>${p.port}</b></td><td>${esc(p.address)}</td><td>${esc(p.process || '–')}${p.pid ? ` (${p.pid})` : ''}</td></tr>`).join('')
-        || '<tr><td colspan="3" class="muted">–</td></tr>';
-    } catch (err) {
-      $('connDot').className = 'dot off';
-      $('hostInfo').textContent = 'Disconnected: ' + err.message;
-    }
-  }
-
-  function killProc(pid, cmd) {
-    if (!confirm(`Kill process ${pid} (${cmd})?`)) return;
-    api('/system/kill', { method: 'POST', body: { pid } })
-      .then((r) => { toast(r.message, 'ok'); setTimeout(loadSystem, 1000); })
-      .catch((err) => toast(err.message, 'err'));
-  }
-
-  const serverAction = (action, text) => act('/server/' + action, null, text);
-
-  // ── projects ────────────────────────────
-  let projects = [];
-
-  async function loadProjects() {
-    try {
-      projects = (await api('/projects')).projects;
-    } catch (err) {
-      $('projectList').innerHTML = `<p class="down">${esc(err.message)}</p>`;
-      return;
-    }
-    const online = projects.filter((p) => p.online > 0).length;
-    $('projVal').textContent = `${online} / ${projects.length}`;
-    $('projSub').textContent = projects.filter((p) => !p.online).map((p) => p.name + ' is down').join(', ');
-
-    $('projectList').innerHTML = projects.map((p) => {
-      const total = p.instances.length;
-      const pill = p.online === total ? 'p-green' : p.online ? 'p-orange' : 'p-red';
-      const label = p.online === total ? 'online' : p.online ? `${p.online}/${total} online` : p.instances[0].status;
-      const startedAt = Math.min(...p.instances.filter((i) => i.status === 'online').map((i) => i.startedAt));
-      const n = js(p.name);
-      return `<div class="proj">
-        <div class="head">
-          <span class="name">${esc(p.name)}</span>
-          <span class="pill ${pill}">${esc(label)}</span>
-          <span class="pill p-grey">${p.mode}${p.mode === 'cluster' ? ' × ' + total : ''}</span>
-          ${p.isAgent ? '<span class="pill p-grey">this panel</span>' : ''}
-        </div>
-        <div class="stats">
-          <div>CPU<b>${p.cpu}%</b></div>
-          <div>Memory<b>${fmtBytes(p.memory)}</b></div>
-          <div>Restarts<b>${p.restarts}</b></div>
-          <div>Uptime<b>${p.online ? fmtDur((Date.now() - startedAt) / 1000) : '–'}</b></div>
-        </div>
-        <div class="meta">📁 ${esc(p.cwd)}<br>▶ ${esc(p.script)}
-          ${p.git ? `<br>🔀 ${esc(p.git.branch)} @ <b>${esc(p.git.commit)}</b>: ${esc(p.git.message)} (${esc(p.git.when)})` : ''}</div>
-        <div class="row" style="margin-top:10px">
-          ${p.online
-            ? `<button type="button" class="b-blue" onclick="projAct(${n},'reload')">Reload</button>
-               <button type="button" class="b-orange" onclick="projAct(${n},'restart')">Restart</button>
-               ${p.isAgent ? '' : `<button type="button" class="b-red" onclick="projAct(${n},'stop')">Stop</button>`}`
-            : `<button type="button" class="b-green" onclick="projAct(${n},'start')">Start</button>`}
-          <button type="button" class="b-green" onclick="projAct(${n},'deploy')">⬇ Deploy</button>
-          ${p.mode === 'cluster' ? `<button type="button" class="b-grey" onclick="scaleProj(${n}, ${total})">Scale</button>` : ''}
-          <button type="button" class="b-blue" onclick="openInCode(${n})">🧑‍💻 Code</button>
-          <button type="button" class="b-grey" onclick="openLogs(${n})">Logs</button>
-          <button type="button" class="b-grey" onclick="openGit(${n})">Git</button>
-          <button type="button" class="b-grey" onclick="openEnv(${n})">.env</button>
-          <button type="button" class="b-grey" onclick="browse(${js(p.cwd)}); showTab('files')">Files</button>
-          <button type="button" class="b-ghost" onclick="projAct(${n},'flush')">Clear logs</button>
-          ${p.isAgent ? '' : `<button type="button" class="b-ghost" onclick="projAct(${n},'delete')">Remove</button>`}
-        </div>
-      </div>`;
-    }).join('') || '<p class="muted">No PM2 projects yet. Click "Add project".</p>';
-  }
-
-  function projAct(name, action) {
-    const texts = {
-      stop: `STOP ${name}? It stays down until you press Start.`,
-      restart: `Restart ${name}? (short downtime)`,
-      reload: `Reload ${name}? (zero-downtime in cluster mode)`,
-      deploy: `Deploy ${name}? Pulls the latest code from git, installs packages and reloads.\nAny changes made directly on the server in that folder will be lost.`,
-      delete: `Remove ${name} from PM2? The app stops, but its files stay on disk.`,
-      flush: `Clear the log files of ${name}?`,
-    };
-    act(`/projects/${encodeURIComponent(name)}/${action}`, null, texts[action] ?? `${action} ${name}?`)
-      .then((r) => r && setTimeout(loadProjects, 2500));
-  }
-
-  function scaleProj(name, current) {
-    const n = prompt(`How many instances for ${name}? (1–8, now ${current})`, current);
-    if (!n) return;
-    act(`/projects/${encodeURIComponent(name)}/scale`, { instances: +n }).then((r) => r && setTimeout(loadProjects, 3000));
-  }
-
-  function openAddProject() {
-    openModal('Add project', `
-      <div class="form">
-        <label for="apName">Name</label><input id="apName" placeholder="my-api">
-        <label for="apRepo">Git repo URL</label><input id="apRepo" placeholder="https://github.com/you/repo.git">
-        <label for="apBranch">Branch</label><input id="apBranch" value="main">
-        <label for="apScript">Start file</label><input id="apScript" value="app.js">
-        <label for="apDir">Folder</label><input id="apDir" placeholder="(default: ~/name)">
-        <label for="apCluster">Cluster mode</label><span><input type="checkbox" id="apCluster"> instances <input id="apInst" type="number" min="1" max="8" value="1" style="width:70px"></span>
-      </div>
-      <p class="muted">Private repos need a deploy key on this server (Settings → Deploy keys on GitHub).
-      After it's added, create the project's .env with the ".env" button and press Restart.</p>`,
-      '<button type="button" class="b-green" onclick="addProject()">Add &amp; start</button>');
-  }
-
-  async function addProject() {
-    const r = await act('/projects', {
-      name: $('apName').value.trim(), repo: $('apRepo').value.trim(), branch: $('apBranch').value.trim(),
-      script: $('apScript').value.trim(), dir: $('apDir').value.trim() || undefined,
-      cluster: $('apCluster').checked, instances: +$('apInst').value,
-    });
-    if (r) { closeModal(); showTab('activity'); }
-  }
-
-  async function openGit(name) {
-    openModal(`Git: ${name}`, '<p class="muted">Checking GitHub…</p>');
-    try {
-      const g = await api(`/projects/${encodeURIComponent(name)}/git`);
-      $('modalBody').innerHTML = `
-        <p>Branch <b>${esc(g.branch)}</b> · ${esc(g.remote || 'no remote')}</p>
-        <p>${g.behind ? `<span class="warn">⬇ ${g.behind} new commit(s) on GitHub, not deployed yet</span>` : '<span class="up">✔ Up to date with GitHub</span>'}
-           ${g.ahead ? `<br><span class="warn">⬆ ${g.ahead} local commit(s) not on GitHub</span>` : ''}</p>
-        ${g.changedFiles.length ? `<p class="warn">${g.changedFiles.length} file(s) edited directly on the server (a deploy will overwrite them):</p>
-          <pre class="out" style="max-height:140px">${esc(g.changedFiles.join('\n'))}</pre>` : ''}
-        <h3 style="margin-top:14px">Recent commits</h3>
-        <p class="muted">"Deploy this" rolls the project back (or forward) to that exact version. The next normal deploy or git push brings it back to the latest.</p>
-        <table><tbody>${g.commits.map((c, i) => `<tr><td><b>${esc(c.hash)}</b></td><td>${esc(c.message)}</td><td class="muted">${esc(c.author)}</td><td class="muted">${esc(c.when)}</td>
-          <td>${i === 0 ? '<span class="muted">current</span>' : `<button type="button" class="b-ghost" onclick="rollback(${js(name)}, ${js(c.hash)}, ${js(c.message)})">⏪ Deploy this</button>`}</td></tr>`).join('')}</tbody></table>`;
-      $('modalFoot').innerHTML = `<button type="button" class="b-green" onclick="closeModal(); projAct(${js(name)},'deploy')">⬇ Deploy latest</button>` + $('modalFoot').innerHTML;
-    } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
-  }
-
-  async function openEnv(name) {
-    try {
-      const e = await api(`/projects/${encodeURIComponent(name)}/env`);
-      openModal(`.env: ${name}`, `
-        <p class="muted">${esc(e.path)}${e.exists ? '' : ' (does not exist yet, saving creates it)'}</p>
-        <textarea id="envText" rows="18" spellcheck="false">${esc(e.content)}</textarea>
-        <p class="warn" style="font-size:12px">⚠ Contains secrets. The previous version is kept as .env.bak. Restart the project after saving.</p>`,
-        `<button type="button" class="b-green" onclick="saveEnv(${js(name)}, false)">Save</button>
-         <button type="button" class="b-orange" onclick="saveEnv(${js(name)}, true)">Save &amp; restart</button>`);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function saveEnv(name, restart) {
-    try {
-      const r = await api(`/projects/${encodeURIComponent(name)}/env`, { method: 'PUT', body: { content: $('envText').value } });
-      toast(r.message, 'ok');
-      closeModal();
-      if (restart) act(`/projects/${encodeURIComponent(name)}/restart`).then(() => setTimeout(loadProjects, 2500));
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── logs ────────────────────────────────
-  let logLines = [];
-  let following = false;
-
-  function fillLogProjects() {
-    const sel = $('logProject'), cur = sel.value;
-    sel.innerHTML = projects.map((p) => `<option>${esc(p.name)}</option>`).join('');
-    if (cur) sel.value = cur;
-    if (!projects.length) api('/projects').then((r) => { projects = r.projects; fillLogProjects(); }).catch(() => {});
-  }
-
-  function openLogs(name) {
-    showTab('logs');
-    $('logProject').value = name;
-    loadLogs();
-  }
-
-  async function loadLogs() {
-    stopFollow();
-    try {
-      const qs = new URLSearchParams({ type: $('logType').value, lines: $('logLines').value });
-      const r = await api(`/projects/${encodeURIComponent($('logProject').value)}/logs?${qs}`);
-      logLines = r.lines;
-      renderLogs();
-    } catch (err) { $('logOut').textContent = 'Error: ' + err.message; }
-  }
-
-  function renderLogs() {
-    const f = $('logFilter').value.toLowerCase();
-    const shown = f ? logLines.filter((l) => l.toLowerCase().includes(f)) : logLines;
-    const out = $('logOut');
-    const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 30;
-    out.textContent = shown.join('\n') || '(empty)';
-    if (atBottom || !following) out.scrollTop = out.scrollHeight;
-  }
-
-  function toggleFollow() {
-    if (following) return stopFollow();
-    following = true;
-    logLines = [];
-    $('followBtn').textContent = '⏸ Stop live';
-    $('followBtn').className = 'b-orange';
-    opsSocket.emit('logs:follow', { name: $('logProject').value, type: $('logType').value });
-  }
-
-  function stopFollow() {
-    if (!following) return;
-    following = false;
-    opsSocket?.emit('logs:stop');
-    $('followBtn').textContent = '▶ Live';
-    $('followBtn').className = 'b-green';
-  }
-
-  // ── services ────────────────────────────
-  async function loadServices() {
-    try {
-      const { services } = await api('/services');
-      $('serviceTable').innerHTML = services.map((s) => {
-        const pill = s.active === 'active' ? 'p-green' : s.active === 'failed' ? 'p-red' : 'p-grey';
-        const n = js(s.name);
-        return `<tr><td><b>${esc(s.name)}</b></td><td class="muted">${esc(s.description)}</td>
-          <td><span class="pill ${pill}">${esc(s.active)} (${esc(s.sub)})</span></td>
-          <td>${s.active === 'active'
-              ? `<button type="button" class="b-orange" onclick="svc(${n},'restart')">Restart</button>
-                 ${s.protected ? '' : `<button type="button" class="b-red" onclick="svc(${n},'stop')">Stop</button>`}`
-              : `<button type="button" class="b-green" onclick="svc(${n},'start')">Start</button>`}</td></tr>`;
-      }).join('');
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  const svc = (name, action) => act(`/services/${name}/${action}`, null, `${action} ${name}?`).then((r) => r && setTimeout(loadServices, 2500));
-
-  // ── files ───────────────────────────────
-  let currentDir = '';
-  let homeDir = '';
-  let dirEntries = [];
-  const dirHistory = []; // folders visited before the current one, for ⬅ Back
-  const joinPath = (dir, name) => dir.replace(/\/$/, '') + '/' + name;
-  const parentOf = (p) => p.slice(0, p.lastIndexOf('/')) || '/';
-
-  // Opens a folder (or a file, which opens the editor). remember=false skips history (refresh / back).
-  async function browse(target, remember = true) {
-    try {
-      const r = await api('/files?path=' + encodeURIComponent(target));
-      if (r.type === 'file') return editFile(r);
-      if (remember && currentDir && currentDir !== r.path) dirHistory.push(currentDir);
-      currentDir = r.path;
-      homeDir = r.home;
-      dirEntries = r.entries;
-      $('pathInput').value = currentDir;
-      $('backBtn').disabled = !dirHistory.length;
-      const rel = currentDir.slice(homeDir.length).split('/').filter(Boolean);
-      let acc = homeDir;
-      $('crumbs').innerHTML = `<a onclick="browse(${js(homeDir)})">🏠 ~</a>` + rel.map((part) => {
-        acc += '/' + part;
-        return ` / <a onclick="browse(${js(acc)})">${esc(part)}</a>`;
-      }).join('');
-      renderFiles();
-    } catch (err) {
-      toast(err.message, 'err');
-      $('pathInput').value = currentDir;
-    }
-  }
-
-  function goBack() {
-    if (dirHistory.length) browse(dirHistory.pop(), false);
-  }
-
-  function goUp() {
-    if (currentDir !== homeDir) browse(parentOf(currentDir));
-  }
-
-  function renderFiles() {
-    const f = $('fileFilter').value.toLowerCase();
-    const hidden = $('showHidden').checked;
-    const shown = dirEntries.filter((e) => (hidden || !e.name.startsWith('.')) && (!f || e.name.toLowerCase().includes(f)));
-    const up = currentDir !== homeDir
-      ? `<tr class="file-row" onclick="goUp()"><td colspan="4">⬆ .. (parent folder)</td></tr>` : '';
-    $('fileTable').innerHTML = up + shown.map((e) => {
-      const p = js(joinPath(currentDir, e.name));
-      return `<tr class="file-row">
-        <td onclick="browse(${p})">${e.type === 'dir' ? '📁' : '📄'} ${esc(e.name)}</td>
-        <td class="muted" onclick="browse(${p})">${e.type === 'dir' ? '' : fmtBytes(e.size)}</td>
-        <td class="muted" onclick="browse(${p})">${e.mtime ? new Date(e.mtime).toLocaleString() : ''}</td>
-        <td>
-          ${e.type === 'file' ? `<button type="button" class="b-ghost" onclick="downloadFile(${p})" title="Download">⬇</button>` : ''}
-          <button type="button" class="b-ghost" onclick="renameItem(${p})" title="Rename">✏️</button>
-          <button type="button" class="b-ghost" onclick="copyPath(${p})" title="Copy path">📋</button>
-          <button type="button" class="b-ghost" onclick="deleteItem(${p}, ${e.type === 'dir'})" title="Delete">🗑️</button>
-        </td></tr>`;
-    }).join('') || (up ? '' : '<tr><td colspan="4" class="muted">Empty folder</td></tr>');
-    if (!shown.length && up) $('fileTable').innerHTML += '<tr><td colspan="4" class="muted">Empty folder</td></tr>';
-  }
-
-  // ── editor ──
-  let editorOriginal = '';
-
-  function editFile(f) {
-    editorOriginal = f.content;
-    openModal(f.path.replace(f.home, '~'), `
-      <textarea id="fileText" rows="24" spellcheck="false">${esc(f.content)}</textarea>
-      <div class="muted" id="editorInfo" style="margin-top:6px"></div>`,
-      `<button type="button" class="b-grey" onclick="closeEditor()">⬅ Back to folder</button>
-       <button type="button" class="b-green" onclick="saveFile(${js(f.path)})">💾 Save (Ctrl+S)</button>`);
-    const ta = $('fileText');
-    const info = () => {
-      const changed = ta.value !== editorOriginal;
-      $('editorInfo').innerHTML = `${ta.value.split('\n').length} lines · ${fmtBytes(new Blob([ta.value]).size)}`
-        + (changed ? ' · <span class="warn">● unsaved changes</span>' : '');
-    };
-    ta.addEventListener('input', info);
-    ta.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(f.path, true); }
-      if (e.key === 'Tab') { // insert two spaces instead of leaving the textarea
-        e.preventDefault();
-        const s = ta.selectionStart;
-        ta.setRangeText('  ', s, ta.selectionEnd, 'end');
-        info();
-      }
-    });
-    info();
-    ta.focus();
-  }
-
-  function closeEditor() {
-    const ta = $('fileText');
-    if (ta && ta.value !== editorOriginal && !confirm('You have unsaved changes. Close without saving?')) return;
-    closeModal();
-  }
-
-  async function saveFile(filePath, stayOpen = false) {
-    try {
-      const content = $('fileText').value;
-      const r = await api('/files', { method: 'PUT', body: { path: filePath, content } });
-      toast(r.message, 'ok');
-      editorOriginal = content;
-      $('fileText').dispatchEvent(new Event('input'));
-      if (!stayOpen) closeModal();
-      browse(currentDir, false);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── file actions ──
-  function newFile() {
-    const name = prompt('New file name (in this folder):');
-    if (name) editFile({ path: joinPath(currentDir, name), home: homeDir, content: '' });
-  }
-
-  async function newFolder() {
-    const name = prompt('New folder name:');
-    if (!name) return;
-    try {
-      const r = await api('/files/mkdir', { method: 'POST', body: { path: joinPath(currentDir, name) } });
-      toast(r.message, 'ok');
-      browse(currentDir, false);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function renameItem(p) {
-    const oldName = p.slice(p.lastIndexOf('/') + 1);
-    const name = prompt('New name:', oldName);
-    if (!name || name === oldName) return;
-    try {
-      const r = await api('/files/rename', { method: 'POST', body: { from: p, to: joinPath(parentOf(p), name) } });
-      toast(r.message, 'ok');
-      browse(currentDir, false);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function deleteItem(p, isDir) {
-    const msg = isDir ? `Delete the folder ${p} and EVERYTHING inside it?` : `Delete ${p}?`;
-    if (!confirm(msg + '\nThis cannot be undone.')) return;
-    try {
-      const r = await api('/files?path=' + encodeURIComponent(p), { method: 'DELETE' });
-      toast(r.message, 'ok');
-      browse(currentDir, false);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function downloadFile(p) {
-    try {
-      const res = await fetch('/api/files/download?path=' + encodeURIComponent(p), { headers: { 'x-ops-token': token() } });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
-      const url = URL.createObjectURL(await res.blob());
-      const a = Object.assign(document.createElement('a'), { href: url, download: p.slice(p.lastIndexOf('/') + 1) });
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  function copyPath(p) {
-    navigator.clipboard?.writeText(p).then(() => toast('Copied: ' + p, 'ok'), () => prompt('Copy this path:', p));
-  }
-
-  async function uploadFiles(fileList) {
-    for (const file of fileList) {
-      const send = (overwrite) => fetch(`/api/files/upload?${new URLSearchParams({ dir: currentDir, name: file.name, overwrite: overwrite ? '1' : '0' })}`, {
-        method: 'POST',
-        headers: { 'x-ops-token': token(), 'Content-Type': 'application/octet-stream' },
-        body: file,
-      });
-      try {
-        let res = await send(false);
-        if (res.status === 409 && confirm(`${file.name} already exists here. Replace it?`)) res = await send(true);
-        const data = await res.json().catch(() => ({}));
-        toast(data.message || `HTTP ${res.status}`, res.ok ? 'ok' : 'err');
-      } catch (err) { toast(err.message, 'err'); }
-    }
-    browse(currentDir, false);
-  }
-
-  // drag & drop upload onto the files card
-  $('filesCard').addEventListener('dragover', (e) => { e.preventDefault(); $('filesCard').style.borderColor = '#38bdf8'; });
-  $('filesCard').addEventListener('dragleave', () => { $('filesCard').style.borderColor = ''; });
-  $('filesCard').addEventListener('drop', (e) => {
-    e.preventDefault();
-    $('filesCard').style.borderColor = '';
-    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-  });
-
-  function terminalHere() {
-    const dir = currentDir;
-    showTab('terminal');
-    const send = () => termSocket.emit('input', `cd ${"'" + dir.replace(/'/g, `'\\''`) + "'"}\r`);
-    if (termSocket?.connected) send();
-    else termSocket?.once('connect', () => setTimeout(send, 300));
-  }
-
-  // ── activity / jobs ─────────────────────
-  const jobs = new Map();
-  const openJobs = new Set();
-
-  function renderJobs() {
-    const list = [...jobs.values()].sort((a, b) => b.startedAt - a.startedAt);
-    const running = list.filter((j) => j.status === 'running').length;
-    $('runningBadge').hidden = !running;
-    $('runningBadge').textContent = running;
-    $('jobList').innerHTML = list.map((j) => {
-      const pill = { running: 'p-orange', success: 'p-green', failed: 'p-red', sent: 'p-grey' }[j.status];
-      const took = j.endedAt ? ` · ${fmtDur((j.endedAt - j.startedAt) / 1000)}` : '';
-      return `<div class="job ${openJobs.has(j.id) ? 'open' : ''}" id="job-${j.id}">
-        <div class="jh" onclick="toggleJob('${j.id}')">
-          <span class="pill ${pill}">${j.status}</span><span class="t">${esc(j.title)}</span>
-          <span class="muted">${new Date(j.startedAt).toLocaleTimeString()}${took}</span></div>
-        <pre class="out">${esc(j.output || '')}</pre></div>`;
-    }).join('') || '<p class="muted">Nothing yet.</p>';
-    openJobs.forEach((id) => { const pre = document.querySelector(`#job-${id} pre`); if (pre) pre.scrollTop = pre.scrollHeight; });
-  }
-
-  async function toggleJob(id) {
-    if (openJobs.has(id)) openJobs.delete(id);
-    else {
-      openJobs.add(id);
-      try { const { job } = await api('/jobs/' + id); jobs.set(id, job); } catch {}
-    }
-    renderJobs();
-  }
-
-  // ── sockets ─────────────────────────────
-  let opsSocket = null;
-
-  function connectOps() {
-    opsSocket = io('/ops', { auth: { token: token() } });
-    opsSocket.on('connect', () => { $('connDot').className = 'dot on'; });
-    opsSocket.on('disconnect', () => { $('connDot').className = 'dot off'; });
-    opsSocket.on('job', (j) => {
-      const prev = jobs.get(j.id);
-      jobs.set(j.id, { ...prev, ...j, output: j.output ?? prev?.output ?? '' });
-      if (!prev) openJobs.add(j.id);
-      if (prev && prev.status === 'running' && j.status !== 'running') {
-        toast(`${j.title}: ${j.status}`, j.status === 'failed' ? 'err' : 'ok');
-        loadProjects();
-      }
-      renderJobs();
-    });
-    opsSocket.on('job:output', ({ id, text }) => {
-      const j = jobs.get(id);
-      if (!j) return;
-      j.output = (j.output || '') + text;
-      const pre = document.querySelector(`#job-${id} pre`);
-      if (pre) { pre.textContent = j.output; pre.scrollTop = pre.scrollHeight; }
-    });
-    opsSocket.on('metrics', (s) => {
-      samples.push(s);
-      if (samples.length > 720) samples.shift();
-      if (activeTab === 'overview') drawCharts();
-    });
-    opsSocket.on('alerts', renderAlerts);
-    opsSocket.on('monitor', () => { if (activeTab === 'monitors') loadMonitors(); });
-    opsSocket.on('logs:data', (text) => {
-      if (!following) return;
-      logLines.push(...text.split('\n').filter(Boolean));
-      if (logLines.length > 5000) logLines = logLines.slice(-5000);
-      renderLogs();
-    });
-  }
-
-  // ── terminal ────────────────────────────
-  let term = null, fit = null, termSocket = null;
-
-  function fitTerm() {
-    if (!term || activeTab !== 'terminal') return;
-    fit.fit();
-    termSocket?.emit('resize', { cols: term.cols, rows: term.rows });
-  }
-
-  function newTerminal() {
-    termSocket?.disconnect();
-    if (!term) {
-      term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: 'Consolas, "Courier New", monospace', theme: { background: '#000000' } });
-      fit = new FitAddon.FitAddon();
-      term.loadAddon(fit);
-      term.open($('terminal'));
-      term.onData((d) => termSocket?.emit('input', d));
-      window.addEventListener('resize', fitTerm);
-    }
-    term.reset();
-    fit.fit();
-    termSocket = io('/terminal', { auth: { token: token() }, query: { cols: term.cols, rows: term.rows }, reconnection: false });
-    termSocket.on('connect', () => { $('termStatus').innerHTML = '<span class="up">● Connected</span>'; term.focus(); });
-    termSocket.on('output', (d) => term.write(d));
-    termSocket.on('exit', () => term.write('\r\n\x1b[33m[session ended, click "New session"]\x1b[0m\r\n'));
-    termSocket.on('disconnect', () => { $('termStatus').innerHTML = '<span class="down">● Disconnected</span>'; });
-    termSocket.on('connect_error', (err) => { $('termStatus').innerHTML = `<span class="down">${esc(err.message)}</span>`; });
-  }
-
-  // ── code editor (Monaco, the editor inside VS Code) ──
-  const MONACO = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
-  let monacoLoading = null;
-  let editor = null;
-  let codeRoot = '';
-  const openFiles = new Map(); // path -> { model, savedVersion, viewState }
-  let activeFile = null;
-
-  // Loaded only when the Code tab is first opened (it's ~3 MB).
-  function loadMonaco() {
-    if (monacoLoading) return monacoLoading;
-    monacoLoading = new Promise((resolve, reject) => {
-      // Monaco's web workers must come from our origin; this proxy imports them from the CDN.
-      window.MonacoEnvironment = {
-        getWorkerUrl: () => `data:text/javascript;charset=utf-8,${encodeURIComponent(
-          `self.MonacoEnvironment = { baseUrl: '${MONACO}/' }; importScripts('${MONACO}/vs/base/worker/workerMain.js');`)}`,
-      };
-      const s = document.createElement('script');
-      s.src = `${MONACO}/vs/loader.js`;
-      s.onload = () => {
-        window.require.config({ paths: { vs: `${MONACO}/vs` } });
-        window.require(['vs/editor/editor.main'], () => resolve(window.monaco));
-      };
-      s.onerror = () => reject(new Error('Could not load the code editor (no internet on this browser?)'));
-      document.head.appendChild(s);
-    });
-    return monacoLoading;
-  }
-
-  const currentCodeProject = () => projects.find((p) => p.cwd === codeRoot);
-
-  async function initCode() {
-    if (editor) { editor.layout(); return; }
-    if (!projects.length) {
-      try { projects = (await api('/projects')).projects; } catch { /* filled later */ }
-    }
-    try {
-      await loadMonaco();
-    } catch (err) {
-      $('codeTree').innerHTML = `<p class="down" style="padding:8px">${esc(err.message)}</p>`;
-      return;
-    }
-    editor = monaco.editor.create($('codeEditor'), {
-      theme: 'vs-dark', automaticLayout: true, fontSize: 13, minimap: { enabled: true },
-      scrollBeyondLastLine: false, tabSize: 2, model: null,
-    });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveActiveCode);
-
-    const sel = $('codeProject');
-    sel.innerHTML = projects.filter((p) => !p.isAgent).concat(projects.filter((p) => p.isAgent))
-      .map((p) => `<option value="${esc(p.cwd)}">📦 ${esc(p.name)}</option>`).join('')
-      + `<option value="${esc(homeDir || '~')}">🏠 Home folder</option>`;
-    if (pendingCodeProject) sel.value = projects.find((p) => p.name === pendingCodeProject)?.cwd || sel.value;
-    pendingCodeProject = null;
-    setCodeRoot(sel.value);
-  }
-
-  let pendingCodeProject = null;
-  function openInCode(name) {
-    const proj = projects.find((p) => p.name === name);
-    if (editor && proj) {
-      $('codeProject').value = proj.cwd;
-      setCodeRoot(proj.cwd);
-    } else pendingCodeProject = name;
-    showTab('code');
-  }
-
-  async function setCodeRoot(root) {
-    if (root === '~') root = (await api('/files?path=')).path;
-    codeRoot = root;
-    const proj = currentCodeProject();
-    $('codeStatus').textContent = proj ? `${proj.name} · ${root}` : root;
-    refreshTree();
-  }
-
-  function refreshTree() {
-    $('codeTree').innerHTML = '';
-    renderTreeLevel(codeRoot, $('codeTree'), 0);
-  }
-
-  async function renderTreeLevel(dir, container, depth) {
-    let r;
-    try {
-      r = await api('/files?path=' + encodeURIComponent(dir));
-    } catch (err) {
-      container.innerHTML = `<div class="node down">${esc(err.message)}</div>`;
-      return;
-    }
-    const pad = 8 + depth * 14;
-    for (const e of r.entries.filter((x) => x.name !== '.git')) {
-      const full = joinPath(r.path, e.name);
-      const node = document.createElement('div');
-      node.className = 'node';
-      node.style.paddingLeft = pad + 'px';
-      node.title = full;
-      node.dataset.path = full;
-      if (e.type === 'dir') {
-        node.textContent = '▸ 📁 ' + e.name;
-        const children = document.createElement('div');
-        children.hidden = true;
-        let loaded = false;
-        node.onclick = () => {
-          children.hidden = !children.hidden;
-          node.textContent = (children.hidden ? '▸' : '▾') + ' 📁 ' + e.name;
-          if (!loaded) { loaded = true; renderTreeLevel(full, children, depth + 1); }
-        };
-        container.append(node, children);
-      } else {
-        node.textContent = '　 📄 ' + e.name;
-        node.onclick = () => openCode(full);
-        container.append(node);
-      }
-    }
-    markActiveNode();
-  }
-
-  function markActiveNode() {
-    document.querySelectorAll('#codeTree .node').forEach((n) => n.classList.toggle('active', n.dataset.path === activeFile));
-  }
-
-  function languageFor(filePath) {
-    const name = filePath.slice(filePath.lastIndexOf('/') + 1).toLowerCase();
-    if (name === '.env' || name.startsWith('.env.')) return 'ini';
-    if (name === 'dockerfile') return 'dockerfile';
-    const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-    return monaco.languages.getLanguages().find((l) => l.extensions?.includes(ext))?.id || 'plaintext';
-  }
-
-  async function openCode(filePath) {
-    if (!openFiles.has(filePath)) {
-      let r;
-      try {
-        r = await api('/files?path=' + encodeURIComponent(filePath));
-      } catch (err) { return toast(err.message, 'err'); }
-      const model = monaco.editor.createModel(r.content, languageFor(filePath));
-      openFiles.set(filePath, { model, savedVersion: model.getAlternativeVersionId(), viewState: null });
-      model.onDidChangeContent(renderCodeTabs);
-    }
-    if (activeFile && openFiles.has(activeFile)) openFiles.get(activeFile).viewState = editor.saveViewState();
-    activeFile = filePath;
-    const f = openFiles.get(filePath);
-    editor.setModel(f.model);
-    if (f.viewState) editor.restoreViewState(f.viewState);
-    editor.focus();
-    renderCodeTabs();
-    markActiveNode();
-  }
-
-  const isDirty = (f) => f.model.getAlternativeVersionId() !== f.savedVersion;
-
-  function renderCodeTabs() {
-    $('codeTabs').innerHTML = [...openFiles.entries()].map(([p, f]) =>
-      `<div class="code-tab ${p === activeFile ? 'active' : ''}" onclick="openCode(${js(p)})" title="${esc(p)}">
-        ${esc(p.slice(p.lastIndexOf('/') + 1))}${isDirty(f) ? ' <span class="dirty">●</span>' : ''}
-        <span class="x" onclick="event.stopPropagation(); closeCode(${js(p)})">✕</span></div>`).join('');
-  }
-
-  function closeCode(filePath) {
-    const f = openFiles.get(filePath);
-    if (isDirty(f) && !confirm(`${filePath} has unsaved changes. Close anyway?`)) return;
-    f.model.dispose();
-    openFiles.delete(filePath);
-    if (activeFile === filePath) {
-      activeFile = null;
-      const next = [...openFiles.keys()].at(-1);
-      if (next) openCode(next); else editor.setModel(null);
-    }
-    renderCodeTabs();
-    markActiveNode();
-  }
-
-  async function saveCode(filePath) {
-    const f = openFiles.get(filePath);
-    const version = f.model.getAlternativeVersionId();
-    await api('/files', { method: 'PUT', body: { path: filePath, content: f.model.getValue() } });
-    f.savedVersion = version;
-    renderCodeTabs();
-  }
-
-  async function saveActiveCode() {
-    if (!activeFile) return;
-    try {
-      await saveCode(activeFile);
-      toast('Saved ' + activeFile.slice(activeFile.lastIndexOf('/') + 1), 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function saveAllCode() {
-    const dirty = [...openFiles.entries()].filter(([, f]) => isDirty(f)).map(([p]) => p);
-    try {
-      for (const p of dirty) await saveCode(p);
-      toast(dirty.length ? `Saved ${dirty.length} file(s)` : 'Nothing to save', 'ok');
-      return true;
-    } catch (err) { toast(err.message, 'err'); return false; }
-  }
-
-  async function saveAndRestart() {
-    const proj = currentCodeProject();
-    if (!proj) return toast('Pick a project (not the home folder) to restart', 'err');
-    if (!(await saveAllCode())) return;
-    act(`/projects/${encodeURIComponent(proj.name)}/${proj.mode === 'cluster' ? 'reload' : 'restart'}`)
-      .then((r) => r && setTimeout(loadProjects, 2500));
-  }
-
-  window.addEventListener('beforeunload', (e) => {
-    if ([...openFiles.values()].some(isDirty)) e.preventDefault();
-  });
-
-  // ── changes / diff / commit ──
-  let diffEditor = null;
-
-  async function openChanges() {
-    const proj = currentCodeProject();
-    if (!proj) return toast('Pick a project (not the home folder) to see git changes', 'err');
-    await saveAllCode();
-    openModal(`🔀 Changes in ${proj.name}`, '<p class="muted">Checking…</p>');
-    try {
-      const g = await api(`/projects/${encodeURIComponent(proj.name)}/git`);
-      const files = g.changedFiles.map((line) => {
-        const status = line.slice(0, 2).trim();
-        const file = line.slice(3).split(' -> ').pop().replace(/^"|"$/g, '');
-        return { status, file };
-      });
-      const label = { M: 'modified', A: 'added', D: 'deleted', '??': 'new', R: 'renamed' };
-      const n = js(proj.name);
-      $('modalBody').innerHTML = `
-        <p>Branch <b>${esc(g.branch)}</b>${g.behind ? ` · <span class="warn">${g.behind} newer commit(s) on GitHub</span>` : ''}${g.ahead ? ` · <span class="warn">${g.ahead} commit(s) not pushed yet</span>` : ''}</p>
-        ${files.length ? `<table><tbody>${files.map((f) => `<tr>
-            <td><span class="pill ${f.status === '??' || f.status === 'A' ? 'p-green' : f.status === 'D' ? 'p-red' : 'p-orange'}">${label[f.status] || esc(f.status)}</span></td>
-            <td style="font-family:Consolas,monospace">${esc(f.file)}</td>
-            <td>${f.status !== 'D' ? `<button type="button" class="b-ghost" onclick="showDiff(${n}, ${js(f.file)})">👁 Diff</button>` : ''}
-                ${f.status !== '??' ? `<button type="button" class="b-ghost" onclick="discardFile(${n}, ${js(f.file)})">↩ Discard</button>` : ''}</td></tr>`).join('')}</tbody></table>
-          <div id="diffBox" style="height:0;margin-top:10px"></div>
-          <h3 style="margin-top:14px">Commit &amp; push to GitHub</h3>
-          <div class="row"><input id="commitMsg" placeholder="What did you change?" style="flex:1">
-            <button type="button" class="b-green" onclick="commitChanges(${n})">⬆ Commit &amp; push</button></div>
-          <p class="muted">Pushing to <b>${esc(g.branch)}</b> starts the CI/CD pipeline, which deploys it the normal way.</p>`
-        : `<p class="up">✔ No changes: the server matches the last commit.</p>
-           ${g.ahead ? `<button type="button" class="b-green" onclick="commitChanges(${n}, true)">⬆ Push ${g.ahead} waiting commit(s)</button>` : ''}`}`;
-    } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
-  }
-
-  async function showDiff(name, file) {
-    const proj = projects.find((p) => p.name === name);
-    try {
-      const [orig, cur] = await Promise.all([
-        api(`/projects/${encodeURIComponent(name)}/original?file=${encodeURIComponent(file)}`),
-        api('/files?path=' + encodeURIComponent(joinPath(proj.cwd, file))),
-      ]);
-      const box = $('diffBox');
-      box.style.height = '50vh';
-      diffEditor?.dispose();
-      diffEditor = monaco.editor.createDiffEditor(box, { theme: 'vs-dark', readOnly: true, automaticLayout: true, renderSideBySide: box.clientWidth > 700 });
-      const lang = languageFor(file);
-      diffEditor.setModel({ original: monaco.editor.createModel(orig.content, lang), modified: monaco.editor.createModel(cur.content, lang) });
-      box.scrollIntoView({ behavior: 'smooth' });
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function discardFile(name, file) {
-    if (!confirm(`Throw away your changes to ${file}? It goes back to the last committed version.`)) return;
-    const r = await act(`/projects/${encodeURIComponent(name)}/discard`, { file });
-    if (!r) return;
-    const full = joinPath(projects.find((p) => p.name === name).cwd, file);
-    if (openFiles.has(full)) { openFiles.get(full).savedVersion = -1; closeCode(full); }
-    setTimeout(openChanges, 1500);
-  }
-
-  async function commitChanges(name, pushOnly) {
-    const message = pushOnly ? 'push' : $('commitMsg').value.trim();
-    if (!message) return toast('Write a short commit message first', 'err');
-    const r = await act(`/projects/${encodeURIComponent(name)}/commit`, { message });
-    if (r) { closeModal(); showTab('activity'); }
-  }
-
-  // ── charts ──────────────────────────────
-  let samples = [];
-
-  // Minimal line chart: series = [{ values, color }], fixed or auto max.
-  function drawLine(canvas, series, { max, label }) {
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w) return;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    const c = canvas.getContext('2d');
-    c.scale(dpr, dpr);
-    c.clearRect(0, 0, w, h);
-    const top = max ?? Math.max(1024, ...series.flatMap((s) => s.values)) * 1.15;
-
-    c.strokeStyle = '#1e293b';
-    c.fillStyle = '#64748b';
-    c.font = '10px Segoe UI, Arial';
-    c.lineWidth = 1;
-    for (const f of [0.25, 0.5, 0.75]) {
-      const y = h - f * h;
-      c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
-      c.fillText(label(top * f), 4, y - 3);
-    }
-
-    for (const { values, color } of series) {
-      if (values.length < 2) continue;
-      const step = w / (values.length - 1);
-      c.beginPath();
-      values.forEach((v, i) => {
-        const x = i * step, y = h - Math.min(1, v / top) * (h - 4) - 2;
-        i ? c.lineTo(x, y) : c.moveTo(x, y);
-      });
-      c.strokeStyle = color;
-      c.lineWidth = 1.6;
-      c.stroke();
-      c.lineTo(w, h); c.lineTo(0, h); c.closePath();
-      c.fillStyle = color + '22';
-      c.fill();
-    }
-  }
-
-  function drawCharts() {
-    if (activeTab !== 'overview') return;
-    const data = samples.slice(-Number($('chartRange').value));
-    const pct = (v) => v.toFixed(0) + '%';
-    const rate = (v) => fmtBytes(v) + '/s';
-    drawLine($('cpuChart'), [{ values: data.map((s) => s.cpu), color: '#38bdf8' }], { max: 100, label: pct });
-    drawLine($('memChart'), [{ values: data.map((s) => s.mem), color: '#a78bfa' }], { max: 100, label: pct });
-    drawLine($('netChart'), [{ values: data.map((s) => s.rx), color: '#4ade80' }, { values: data.map((s) => s.tx), color: '#fbbf24' }], { label: rate });
-    const last = samples.at(-1);
-    if (last) {
-      $('cpuNow').textContent = last.cpu + '%';
-      $('memNow').textContent = last.mem + '%';
-      $('netNow').textContent = `⬇ ${rate(last.rx)} ⬆ ${rate(last.tx)}`;
-    }
-  }
-
-  // ── alerts ──────────────────────────────
-  let activeAlerts = [];
-
-  function renderAlerts(list) {
-    activeAlerts = list;
-    $('alertCount').textContent = list.length;
-    $('alertBell').classList.toggle('has', list.length > 0);
-    $('alertBanner').innerHTML = list.map((a) =>
-      `<div class="notice ${a.level === 'critical' ? 'crit' : 'warn'}">${a.level === 'critical' ? '🚨' : '⚠️'} ${esc(a.message)}
-        <span class="muted">since ${new Date(a.since).toLocaleTimeString()}</span></div>`).join('');
-  }
-
-  async function openAlerts() {
-    openModal('🔔 Alerts', '<p class="muted">Loading…</p>');
-    try {
-      const r = await api('/alerts');
-      $('modalBody').innerHTML = `
-        <h3>Active now</h3>
-        ${r.active.length ? r.active.map((a) => `<div class="notice ${a.level === 'critical' ? 'crit' : 'warn'}">${esc(a.message)}
-          <span class="muted">since ${new Date(a.since).toLocaleString()}</span></div>`).join('') : '<p class="up">✔ Everything is fine.</p>'}
-        <h3 style="margin-top:14px">History</h3>
-        <table><tbody>${r.history.map((h) => `<tr><td class="muted">${new Date(h.at).toLocaleString()}</td>
-          <td>${h.event === 'raised' ? '<span class="pill p-red">raised</span>' : '<span class="pill p-green">resolved</span>'}</td>
-          <td>${esc(h.message)}</td></tr>`).join('') || '<tr><td class="muted">No alerts yet.</td></tr>'}</tbody></table>
-        <p class="muted">Set a Discord/Slack webhook and thresholds in Settings.</p>`;
-    } catch (err) { $('modalBody').innerHTML = `<p class="down">${esc(err.message)}</p>`; }
-  }
-
-  // ── rollback ────────────────────────────
-  function rollback(name, hash, message) {
-    closeModal();
-    act(`/projects/${encodeURIComponent(name)}/deploy`, { commit: hash },
-      `Roll ${name} back to ${hash} ("${message}")?\nThe code on the server is replaced with that version, packages reinstalled and the app reloaded.`)
-      .then((r) => r && setTimeout(loadProjects, 3000));
-  }
-
-  // ── monitors ────────────────────────────
-  let monitorsData = [];
-
-  async function loadMonitors() {
-    try {
-      monitorsData = (await api('/monitors')).monitors;
-    } catch (err) {
-      $('monitorList').innerHTML = `<p class="down">${esc(err.message)}</p>`;
-      return;
-    }
-    $('monitorList').innerHTML = monitorsData.map((m) => {
-      const up = m.last?.ok;
-      const status = !m.last ? '<span class="pill p-grey">waiting</span>'
-        : up ? '<span class="pill p-green">UP</span>' : '<span class="pill p-red">DOWN</span>';
-      const maxMs = Math.max(100, ...m.history.map((h) => h.ms));
-      const id = js(m.id);
-      return `<div class="proj">
-        <div class="head"><span class="name">${esc(m.name)}</span>${status}
-          ${m.autoRestart ? `<span class="pill p-grey">auto-heal → ${esc(m.project)}</span>` : ''}</div>
-        <div class="meta">🔗 ${esc(m.url)} · every ${m.intervalSec}s · down after ${m.failThreshold} fails</div>
-        <div class="spark" title="Last checks (height = response time, red = failed)">${m.history.map((h) =>
-          `<span class="${h.ok ? '' : 'bad'}" style="height:${h.ok ? Math.max(8, (h.ms / maxMs) * 100) : 100}%" title="${new Date(h.t).toLocaleTimeString()} · ${h.ok ? h.ms + ' ms' : esc(h.error || 'HTTP ' + h.status)}"></span>`).join('')}</div>
-        <div class="stats">
-          <div>Uptime<b>${m.uptimePct ?? '–'}${m.uptimePct != null ? '%' : ''}</b></div>
-          <div>Avg response<b>${m.avgMs != null ? m.avgMs + ' ms' : '–'}</b></div>
-          <div>Last<b>${m.last ? (m.last.ok ? m.last.ms + ' ms' : esc(m.last.error || 'HTTP ' + m.last.status)) : '–'}</b></div>
-          <div>Fails in a row<b>${m.fails}</b></div>
-        </div>
-        ${m.lastHeal ? `<div class="muted">Last auto-heal restart: ${new Date(m.lastHeal).toLocaleString()}</div>` : ''}
-        <div class="row" style="margin-top:8px">
-          <button type="button" class="b-blue" onclick="checkMonitor(${id})">▶ Check now</button>
-          <button type="button" class="b-grey" onclick="openMonitorForm(${id})">✏️ Edit</button>
-          <button type="button" class="b-ghost" onclick="deleteMonitor(${id})">🗑️ Delete</button>
-        </div></div>`;
-    }).join('') || '<p class="muted">No monitors yet. Click "Add monitor".</p>';
-  }
-
-  function openMonitorForm(id) {
-    const m = monitorsData.find((x) => x.id === id) || { name: '', url: 'http://localhost:', intervalSec: 30, timeoutMs: 5000, failThreshold: 3, project: '', autoRestart: false };
-    const options = ['<option value="">(none)</option>', ...projects.map((p) => `<option ${p.name === m.project ? 'selected' : ''}>${esc(p.name)}</option>`)].join('');
-    openModal(id ? `Edit monitor: ${m.name}` : 'Add monitor', `
-      <div class="form">
-        <label for="mName">Name</label><input id="mName" value="${esc(m.name)}" placeholder="My API">
-        <label for="mUrl">URL</label><input id="mUrl" value="${esc(m.url)}" placeholder="http://localhost:5000/api">
-        <label for="mInterval">Check every (s)</label><input id="mInterval" type="number" min="10" max="3600" value="${m.intervalSec}">
-        <label for="mTimeout">Timeout (ms)</label><input id="mTimeout" type="number" min="1000" max="30000" value="${m.timeoutMs}">
-        <label for="mFails">Down after N fails</label><input id="mFails" type="number" min="1" max="10" value="${m.failThreshold}">
-        <label for="mProject">Project</label><select id="mProject">${options}</select>
-        <label for="mHeal">Auto-heal</label><span><input type="checkbox" id="mHeal" ${m.autoRestart ? 'checked' : ''}> restart the project when it goes down (max once per 5 min)</span>
-      </div>
-      <p class="muted">Use localhost URLs for apps on this server (e.g. http://localhost:5000/api). Any public URL works too.</p>`,
-      `<button type="button" class="b-green" onclick="saveMonitor(${js(id || '')})">💾 Save</button>`);
-  }
-
-  async function saveMonitor(id) {
-    const body = {
-      name: $('mName').value, url: $('mUrl').value, intervalSec: +$('mInterval').value, timeoutMs: +$('mTimeout').value,
-      failThreshold: +$('mFails').value, project: $('mProject').value, autoRestart: $('mHeal').checked,
-    };
-    try {
-      const r = await api(id ? `/monitors/${id}` : '/monitors', { method: id ? 'PUT' : 'POST', body });
-      toast(r.message, 'ok');
-      closeModal();
-      setTimeout(loadMonitors, 2500);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function checkMonitor(id) {
-    try {
-      const r = await api(`/monitors/${id}/check`, { method: 'POST' });
-      toast(r.message, r.result.ok ? 'ok' : 'err');
-      loadMonitors();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function deleteMonitor(id) {
-    const m = monitorsData.find((x) => x.id === id);
-    if (!confirm(`Delete monitor "${m?.name}"?`)) return;
-    try {
-      toast((await api(`/monitors/${id}`, { method: 'DELETE' })).message, 'ok');
-      loadMonitors();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── redis ───────────────────────────────
-  async function loadRedisInfo() {
-    try {
-      const r = await api('/redis/info');
-      const tile = (label, value) => `<div class="tile"><div class="label">${label}</div><div class="value">${esc(value ?? '–')}</div></div>`;
-      $('redisTiles').innerHTML = tile('Keys', r.keys) + tile('Memory used', r.memory) + tile('Ops / sec', r.opsPerSec)
-        + tile('Cache hit rate', r.hitRate != null ? r.hitRate + '%' : '–') + tile('Clients', r.clients)
-        + tile('Version · uptime', `${r.version} · ${fmtDur(r.uptimeSec)}`);
-    } catch (err) {
-      $('redisTiles').innerHTML = `<div class="notice crit">${esc(err.message)}. Check the Services tab: is redis-server running?</div>`;
-    }
-  }
-
-  const fmtTtl = (t) => (t === -1 ? 'never' : t === -2 ? 'expired' : fmtDur(t));
-
-  async function loadRedisKeys() {
-    try {
-      const r = await api('/redis/keys?pattern=' + encodeURIComponent($('redisPattern').value || '*'));
-      $('redisKeys').innerHTML = r.keys.map((k) => `<tr>
-        <td style="font-family:Consolas,monospace;word-break:break-all">${esc(k.key)}</td>
-        <td><span class="pill p-grey">${esc(k.type)}</span></td><td class="muted">${fmtTtl(k.ttl)}</td>
-        <td><button type="button" class="b-ghost" onclick="viewRedisKey(${js(k.key)})">👁 View</button>
-            <button type="button" class="b-ghost" onclick="deleteRedisKey(${js(k.key)})">🗑️</button></td></tr>`).join('')
-        || '<tr><td colspan="4" class="muted">No keys match.</td></tr>';
-      $('redisNote').textContent = r.truncated ? 'Showing the first 300 matches. Narrow the pattern to see more.' : `${r.keys.length} key(s)`;
-      loadRedisInfo();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function viewRedisKey(key) {
-    try {
-      const r = await api('/redis/key?key=' + encodeURIComponent(key));
-      let pretty = r.value;
-      if (typeof pretty === 'string') {
-        try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch { /* not JSON */ }
-      } else pretty = JSON.stringify(pretty, null, 2);
-      openModal(`🗄️ ${key}`, `<p class="muted">Type <b>${esc(r.type)}</b> · size ${esc(r.size ?? '–')} · expires: ${fmtTtl(r.ttl)}</p>
-        <pre class="out" style="max-height:60vh">${esc(pretty)}</pre>`,
-        `<button type="button" class="b-red" onclick="deleteRedisKey(${js(key)}, true)">🗑️ Delete</button>`);
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function deleteRedisKey(key, fromModal) {
-    if (!confirm(`Delete Redis key "${key}"?`)) return;
-    try {
-      toast((await api('/redis/key?key=' + encodeURIComponent(key), { method: 'DELETE' })).message, 'ok');
-      if (fromModal) closeModal();
-      loadRedisKeys();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  function openRedisSet() {
-    openModal('Set a Redis key (string)', `
-      <div class="form">
-        <label for="rkKey">Key</label><input id="rkKey">
-        <label for="rkTtl">Expires in (s)</label><input id="rkTtl" type="number" min="0" placeholder="0 = never">
-      </div>
-      <p class="muted" style="margin-top:10px">Value</p><textarea id="rkVal" rows="8" spellcheck="false"></textarea>`,
-      '<button type="button" class="b-green" onclick="saveRedisKey()">💾 Save</button>');
-  }
-
-  async function saveRedisKey() {
-    try {
-      const r = await api('/redis/key', { method: 'POST', body: { key: $('rkKey').value, value: $('rkVal').value, ttl: +$('rkTtl').value || 0 } });
-      toast(r.message, 'ok');
-      closeModal();
-      loadRedisKeys();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function flushRedis() {
-    if (!confirm('Delete ALL keys in Redis? Caches will rebuild, but anything only stored in Redis is gone.')) return;
-    if (prompt('Type DELETE to confirm') !== 'DELETE') return;
-    try {
-      toast((await api('/redis/flushdb', { method: 'POST' })).message, 'ok');
-      loadRedisKeys();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── cron ────────────────────────────────
-  const CRON_EXAMPLES = [
-    ['Every 5 minutes: ping the API', '*/5 * * * * curl -s http://localhost:5000/api > /dev/null'],
-    ['Every night 02:00 UTC: clean PM2 logs', '0 2 * * * pm2 flush'],
-    ['Every Sunday 03:00 UTC: backup .env', '0 3 * * 0 cp ~/eventease_backend/.env ~/env-backup-$(date +\\%F).env'],
-    ['Every day 04:00 UTC: delete files older than 7 days in ~/tmp', '0 4 * * * find ~/tmp -type f -mtime +7 -delete'],
-    ['On every reboot: write a line to a log', '@reboot echo "rebooted $(date)" >> ~/reboots.log'],
-  ];
-
-  async function loadCron() {
-    try {
-      const r = await api('/cron');
-      $('cronText').value = r.content;
-      $('cronInfo').textContent = `${r.jobCount} active job(s)`;
-      $('cronUser').textContent = $('hostInfo').textContent.split(' · ')[1] || 'this user';
-      $('cronExamples').innerHTML = CRON_EXAMPLES.map(([title, line]) =>
-        `<div class="notice info" style="cursor:pointer" onclick="addCronLine(${js('# ' + title + '\n' + line)})">
-          <b>${esc(title)}</b><br><code>${esc(line)}</code></div>`).join('');
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  function addCronLine(text) {
-    const ta = $('cronText');
-    ta.value = (ta.value.trim() ? ta.value.replace(/\n*$/, '\n\n') : '') + text + '\n';
-    toast('Added. Click "Save crontab" to apply.', 'ok');
-  }
-
-  async function saveCron() {
-    try {
-      toast((await api('/cron', { method: 'PUT', body: { content: $('cronText').value } })).message, 'ok');
-      loadCron();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── security ────────────────────────────
-  async function loadSecurity() {
-    try {
-      const r = await api('/security');
-      $('secSessions').textContent = r.sessions || '(nobody is logged in over SSH)';
-      $('secLogins').textContent = r.logins || '(no login history available)';
-      $('secLockouts').innerHTML = r.lockouts.map((l) => `<tr><td>${esc(l.ip)}</td><td>${l.failures}</td><td class="muted">${new Date(l.since).toLocaleString()}</td>
-        <td><button type="button" class="b-ghost" onclick="unblockIp(${js(l.ip)})">Unblock</button></td></tr>`).join('')
-        || '<tr><td colspan="4" class="muted">None.</td></tr>';
-      $('secAudit').innerHTML = r.audit.map((a) => `<tr><td class="muted">${new Date(a.t).toLocaleString()}</td><td>${esc(a.ip)}</td>
-        <td><b>${esc(a.method)}</b> ${esc(a.path)}</td>
-        <td><span class="pill ${a.status < 400 ? 'p-green' : 'p-red'}">${a.status}</span></td>
-        <td class="muted" style="font-family:Consolas,monospace;font-size:11px">${a.body && Object.keys(a.body).length ? esc(JSON.stringify(a.body)) : ''}</td></tr>`).join('')
-        || '<tr><td colspan="5" class="muted">No changes yet.</td></tr>';
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function unblockIp(ip) {
-    try {
-      toast((await api('/security/lockouts/' + encodeURIComponent(ip), { method: 'DELETE' })).message, 'ok');
-      loadSecurity();
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── settings ────────────────────────────
-  let settingsData = null;
-
-  async function loadSettings() {
-    try {
-      settingsData = (await api('/settings')).settings;
-      $('setWebhook').value = settingsData.webhookUrl;
-      $('setCpu').value = settingsData.thresholds.cpu;
-      $('setMem').value = settingsData.thresholds.memory;
-      $('setDisk').value = settingsData.thresholds.disk;
-      $('setQuick').value = settingsData.quickCommands.map((c) => `${c.name} | ${c.command}`).join('\n');
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function saveSettings() {
-    const quickCommands = $('setQuick').value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
-      const i = l.indexOf('|');
-      return i < 0 ? { name: l, command: l } : { name: l.slice(0, i).trim(), command: l.slice(i + 1).trim() };
-    });
-    try {
-      const r = await api('/settings', {
-        method: 'PUT',
-        body: {
-          webhookUrl: $('setWebhook').value.trim(),
-          thresholds: { cpu: +$('setCpu').value, memory: +$('setMem').value, disk: +$('setDisk').value },
-          quickCommands,
-        },
-      });
-      settingsData = r.settings;
-      toast(r.message, 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  async function testWebhook() {
-    await saveSettings();
-    try { toast((await api('/alerts/test', { method: 'POST' })).message, 'ok'); } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── run command ─────────────────────────
-  function renderQuickCmds() {
-    $('quickCmds').innerHTML = (settingsData?.quickCommands || []).map((c, i) =>
-      `<button type="button" class="b-ghost" onclick="runQuick(${i})" title="${esc(c.command)}">${esc(c.name)}</button>`).join('');
-  }
-
-  const runQuick = (i) => runCommand(settingsData.quickCommands[i].command);
-
-  async function runCommand(preset) {
-    const command = typeof preset === 'string' ? preset : $('runCmd').value.trim();
-    if (!command) return;
-    try {
-      await api('/run', { method: 'POST', body: { command, cwd: $('runCwd').value.trim() || undefined } });
-      if (typeof preset !== 'string') $('runCmd').value = '';
-    } catch (err) { toast(err.message, 'err'); }
-  }
-
-  // ── start ───────────────────────────────
-  let started = false;
-  async function start() {
-    if (started) return;
-    started = true;
-    connectOps();
-    loadSystem();
-    loadProjects();
-    api('/jobs').then((r) => { r.jobs.forEach((j) => jobs.set(j.id, j)); renderJobs(); }).catch(() => {});
-    api('/metrics').then((r) => { samples = r.samples; drawCharts(); }).catch(() => {});
-    api('/alerts').then((r) => renderAlerts(r.active)).catch(() => {});
-    api('/settings').then((r) => { settingsData = r.settings; }).catch(() => {});
-    window.addEventListener('resize', () => { if (activeTab === 'overview') drawCharts(); });
-    setInterval(() => {
-      if (!$('autoRefresh').checked) return;
-      if (activeTab === 'overview') { loadSystem(); loadProjects(); }
-      if (activeTab === 'projects') loadProjects();
-      if (activeTab === 'services') loadServices();
-      if (activeTab === 'monitors') loadMonitors();
-    }, 5000);
-  }
-
-  if (!token()) showLogin();
-  else api('/system').then(start).catch(() => {});
-</script>
+<script src="js/app.js"></script>
+<script src="js/code.js"></script>
+<script>start0();</script>
 </body>
 </html>
+

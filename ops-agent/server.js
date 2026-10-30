@@ -284,6 +284,7 @@ const alerts = require('./features/alerts')(ctx, { metrics, settings });
 require('./features/monitors')(ctx, { alerts });
 require('./features/redis')(ctx);
 require('./features/cron')(ctx);
+const backups = require('./features/backups')(ctx);
 
 // Pending Ubuntu updates, cached — apt-check takes a second or two.
 let updatesCache = { at: 0, value: null };
@@ -459,6 +460,32 @@ app.post('/api/projects/:name/:action', async (req, res) => {
       ].join('\n'), { cwd: proj.cwd });
       break;
     }
+    case 'destroy': {
+      // Delete a project for good: stop it, drop it from PM2, remove its folder.
+      if (req.body?.confirm !== name) throw new HttpError(400, 'Type the project name to confirm');
+      if (proj.isAgent) throw new HttpError(400, 'The control panel cannot delete itself');
+      const dir = insideHome(proj.cwd);
+      if (!dir || dir === HOME || isProtected(dir)) throw new HttpError(400, `Refusing to delete ${proj.cwd}`);
+      if (__dirname === dir || __dirname.startsWith(dir + path.sep)) {
+        throw new HttpError(400, `${dir} also contains this control panel. Remove it from PM2 instead, or move the panel first`);
+      }
+      // other PM2 apps living in the same folder would lose their files too
+      const neighbours = (await getProjects()).filter((p) => p.name !== name && (p.cwd === dir || p.cwd.startsWith(dir + path.sep)));
+      if (neighbours.length) throw new HttpError(400, `Also used by: ${neighbours.map((p) => p.name).join(', ')}. Delete those first`);
+
+      // safety net: snapshot first, so a deleted project can be restored from Backups
+      const backup = backups.backupCommand(proj);
+      job = startJob(`DELETE project ${name}`, [
+        'set -e',
+        backup.command,
+        'set +e',
+        `pm2 delete ${q(name)} || true`,
+        'pm2 save',
+        `rm -rf -- ${q(dir)}`,
+        `echo "🗑️  ${name} removed from PM2 and ${dir} deleted"`,
+      ].join('\n'));
+      break;
+    }
     case 'discard': {
       // Throw away server-side edits to one file (or all tracked files).
       const file = req.body?.file ? projectFile(proj, req.body.file) : null;
@@ -528,7 +555,18 @@ app.get('/api/projects/:name/original', async (req, res) => {
 app.get('/api/projects/:name/env', async (req, res) => {
   const { cwd } = await findProject(req.params.name);
   const file = path.join(cwd, '.env');
-  res.json({ success: true, path: file, exists: fs.existsSync(file), content: fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' });
+  const content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+
+  // keys listed in .env.example but missing (or empty) in .env
+  const keys = (text) => new Map(text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && l.includes('='))
+    .map((l) => [l.slice(0, l.indexOf('=')).replace(/^export\s+/, '').trim(), l.slice(l.indexOf('=') + 1).trim()]));
+  const exampleFile = path.join(cwd, '.env.example');
+  let missing = null;
+  if (fs.existsSync(exampleFile)) {
+    const have = keys(content);
+    missing = [...keys(fs.readFileSync(exampleFile, 'utf8')).keys()].filter((k) => !have.get(k));
+  }
+  res.json({ success: true, path: file, exists: fs.existsSync(file), content, missing });
 });
 
 app.put('/api/projects/:name/env', async (req, res) => {
@@ -628,6 +666,63 @@ const homePath = (p, what = 'path') => {
   return target;
 };
 
+// Every file under a folder (relative paths), for the editor's "Go to file".
+const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', 'coverage']);
+app.get('/api/files/tree', (req, res) => {
+  const root = homePath(req.query.root, 'folder');
+  const files = [];
+  const MAX = 10000;
+  const walk = (dir, rel, depth) => {
+    if (files.length >= MAX || depth > 15) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (files.length >= MAX) return;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (!SKIP_DIRS.has(e.name)) walk(path.join(dir, e.name), r, depth + 1);
+      } else if (e.isFile()) files.push(r);
+    }
+  };
+  walk(root, '', 0);
+  res.json({ success: true, root, files, truncated: files.length >= MAX });
+});
+
+// Search text inside files (grep), for the editor's "Find in files".
+app.get('/api/files/grep', async (req, res) => {
+  const root = homePath(req.query.root, 'folder');
+  const query = String(req.query.q || '');
+  if (!query) throw new HttpError(400, 'Search text is required');
+  const args = ['-rnI', '--color=never', '-m', '30'];
+  if (req.query.case !== '1') args.push('-i');
+  if (req.query.regex !== '1') args.push('-F');
+  if (req.query.word === '1') args.push('-w');
+  for (const d of SKIP_DIRS) args.push(`--exclude-dir=${d}`);
+  args.push('--exclude=*.min.js', '--exclude=package-lock.json', '-e', query, '--', '.');
+
+  const out = await new Promise((resolve, reject) => {
+    execFile('grep', args, { cwd: root, timeout: 20000, maxBuffer: 10 * 1024 * 1024, env: CLEAN_ENV }, (err, stdout, stderr) => {
+      if (err && err.code === 1) return resolve(''); // grep exits 1 when nothing matches
+      if (err && !stdout) return reject(new HttpError(400, stderr.trim() || err.message));
+      resolve(stdout);
+    });
+  });
+
+  const MAX_RESULTS = 500;
+  const matches = [];
+  for (const line of out.split('\n')) {
+    if (!line) continue;
+    const m = /^\.\/(.+?):(\d+):(.*)$/.exec(line);
+    if (m) matches.push({ file: m[1], line: Number(m[2]), text: m[3].slice(0, 400) });
+    if (matches.length >= MAX_RESULTS) break;
+  }
+  res.json({ success: true, root, matches, truncated: matches.length >= MAX_RESULTS });
+});
+
 app.post('/api/files/mkdir', (req, res) => {
   const target = homePath(req.body?.path, 'folder');
   if (fs.existsSync(target)) throw new HttpError(409, 'Already exists');
@@ -659,15 +754,51 @@ app.get('/api/files/download', (req, res) => {
   res.download(target);
 });
 
+// name may contain sub-folders ("src/routes/a.js") so whole project folders can be dropped in
 app.post('/api/files/upload', express.raw({ type: '*/*', limit: '50mb' }), (req, res) => {
-  const name = String(req.query.name || '');
-  if (!name || name.includes('/') || name === '.' || name === '..') throw new HttpError(400, 'Invalid file name');
+  const name = String(req.query.name || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const parts = name.split('/');
+  if (!name || parts.some((p) => !p || p === '.' || p === '..')) throw new HttpError(400, 'Invalid file name');
   const dir = homePath(req.query.dir, 'folder');
-  const target = homePath(path.join(dir, name));
+  const target = homePath(path.join(dir, ...parts));
+  if (isProtected(target)) throw new HttpError(403, `${target} is protected`);
   if (fs.existsSync(target) && req.query.overwrite !== '1') throw new HttpError(409, `${name} already exists`);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0); // empty upload → {} from express.raw
   fs.writeFileSync(target, data);
   res.json({ success: true, message: `Uploaded ${name} (${data.length} bytes)` });
+});
+
+// Copy a file or a whole folder (explorer copy → paste, duplicate).
+app.post('/api/files/copy', (req, res) => {
+  const from = homePath(req.body?.from);
+  let to = homePath(req.body?.to);
+  if (!fs.existsSync(from)) throw new HttpError(404, 'Source not found');
+  // same path = duplicate (gets a "copy" name below); inside itself = impossible
+  if (to.startsWith(from + path.sep)) throw new HttpError(400, 'Cannot copy a folder into itself');
+  if (fs.existsSync(to)) {
+    // paste next to an existing name → "name copy", "name copy 2"…
+    const ext = fs.statSync(from).isDirectory() ? '' : path.extname(to);
+    const stem = to.slice(0, to.length - ext.length);
+    let n = 1;
+    do { to = `${stem} copy${n > 1 ? ' ' + n : ''}${ext}`; n++; } while (fs.existsSync(to));
+  }
+  fs.cpSync(from, to, { recursive: true, errorOnExist: true });
+  res.json({ success: true, message: `Copied to ${path.basename(to)}`, path: to });
+});
+
+// Download a folder (or a whole project) as .tar.gz, without node_modules and .git.
+app.get('/api/files/archive', (req, res) => {
+  const target = homePath(req.query.path, 'folder');
+  if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) throw new HttpError(404, 'Folder not found');
+  const name = path.basename(target) || 'home';
+  const excludes = req.query.full === '1' ? [] : ['--exclude=node_modules', '--exclude=.git'];
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}.tar.gz"`);
+  const tar = spawn('tar', ['-czf', '-', ...excludes, '-C', path.dirname(target), name], { env: CLEAN_ENV });
+  tar.stdout.pipe(res);
+  tar.on('error', () => res.destroy());
+  req.on('close', () => tar.kill());
 });
 
 app.put('/api/files', (req, res) => {
@@ -734,9 +865,17 @@ termNs.on('connection', (socket) => {
   const clamp = (v, min, max, def) => Math.min(max, Math.max(min, parseInt(v, 10) || def));
   const cols = clamp(socket.handshake.query.cols, 20, 500, 120);
   const rows = clamp(socket.handshake.query.rows, 5, 200, 30);
+  // the code editor opens its terminal inside the project folder
+  let cwd = HOME;
+  try {
+    const wanted = socket.handshake.query.cwd ? insideHome(String(socket.handshake.query.cwd)) : null;
+    if (wanted && fs.existsSync(wanted) && fs.statSync(wanted).isDirectory()) cwd = wanted;
+  } catch {
+    // fall back to HOME
+  }
 
   if (pty) {
-    const term = pty.spawn('bash', ['-l'], { name: 'xterm-256color', cols, rows, cwd: HOME, env: CLEAN_ENV });
+    const term = pty.spawn('bash', ['-l'], { name: 'xterm-256color', cols, rows, cwd, env: CLEAN_ENV });
     term.onData((d) => socket.emit('output', d));
     term.onExit(() => {
       socket.emit('exit');
@@ -749,8 +888,8 @@ termNs.on('connection', (socket) => {
   }
 
   // Fallback without node-pty: util-linux `script` allocates the pty for us.
-  const child = spawn('script', ['-qfc', 'bash -l', '/dev/null'], { cwd: HOME, env: CLEAN_ENV });
-  child.stdin.write(`stty cols ${cols} rows ${rows}; clear\n`);
+  const child = spawn('script', ['-qfc', 'bash -l', '/dev/null'], { cwd, env: CLEAN_ENV });
+  child.stdin.write(`stty cols ${cols} rows ${rows}; cd ${q(cwd)}; clear\n`);
   child.stdout.on('data', (d) => socket.emit('output', d.toString()));
   child.stderr.on('data', (d) => socket.emit('output', d.toString()));
   child.on('exit', () => {
