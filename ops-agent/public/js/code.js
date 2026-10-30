@@ -644,6 +644,15 @@
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(el);
+
+    // Fix Ctrl+V paste — xterm.js doesn't intercept the browser paste event in all browsers.
+    // Listening on the terminal's DOM element captures it and sends it through the socket.
+    el.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = e.clipboardData?.getData('text') || '';
+      if (text) s.socket?.emit('input', text);
+    });
+
     const s = { id: ++termSeq, term, fit, socket: null, cwd, el, alive: true };
     termSessions.push(s);
     switchSession(s.id);

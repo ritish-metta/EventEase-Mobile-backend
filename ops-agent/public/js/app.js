@@ -910,6 +910,12 @@
       term.loadAddon(fit);
       term.open($('terminal'));
       term.onData((d) => termSocket?.emit('input', d));
+      // Fix Ctrl+V paste in the terminal tab
+      $('terminal').addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = e.clipboardData?.getData('text') || '';
+        if (text) termSocket?.emit('input', text);
+      });
       window.addEventListener('resize', fitTerm);
     }
     term.reset();
