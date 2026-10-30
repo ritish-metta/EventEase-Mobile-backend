@@ -909,7 +909,7 @@
     const div = big ? 1024 ** 3 : 1024 ** 2;
     $(key + 'Val').textContent = big ? (used / div).toFixed(1) : Math.round(used / div);
     $(key + 'Total').textContent = `/ ${big ? (total / div).toFixed(1) : Math.round(total / div)} ${unit}`;
-    $(key + 'Badge').textContent = `${Math.round(pct)}% Used`;
+    $(key + 'Badge').innerHTML = `<span class="lvl ${pct > 85 ? 'hot' : pct > 65 ? 'mid' : ''}"></span>${Math.round(pct)}% Used`;
     const filled = Math.round((pct / 100) * BLOCKS);
     $(key + 'Blocks').innerHTML = Array.from({ length: BLOCKS }, (_, i) =>
       `<i class="${i >= filled ? 'empty' : pct > 85 && i >= BLOCKS - 2 ? 'hot' : ''}"></i>`).join('');

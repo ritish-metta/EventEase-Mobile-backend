@@ -1,0 +1,67 @@
+/* ─────────────────────────────────────────────────────────────
+   Icon accents: the design stays black / white / pastel, only the
+   small icons inside neutral buttons, tabs, menus and tiles get a
+   colour. One colour per KIND of action, the same on every screen:
+
+     violet  edit          sky     look / read     git-orange  version control
+     yellow  folders       teal    upload/download rose        secrets / security
+     green   run           amber   restart/refresh blue        save
+     indigo  scale/copy    red     danger          slate       cleanup / settings
+   ───────────────────────────────────────────────────────────── */
+
+:root:not([data-theme="dark"]) {
+  --ac-violet: #7c5cff; --ac-sky: #0284c7;  --ac-git: #e8590c; --ac-folder: #d39e00;
+  --ac-teal: #0f9488;   --ac-rose: #db2777; --ac-green: #16a34a; --ac-amber: #d97706;
+  --ac-blue: #2563eb;   --ac-indigo: #4f46e5; --ac-red: #dc2626; --ac-slate: #64748b;
+}
+[data-theme="dark"] {
+  --ac-violet: #a78bfa; --ac-sky: #38bdf8;  --ac-git: #ff8a4c; --ac-folder: #fcd34d;
+  --ac-teal: #2dd4bf;   --ac-rose: #f472b6; --ac-green: #4ade80; --ac-amber: #fbbf24;
+  --ac-blue: #60a5fa;   --ac-indigo: #818cf8; --ac-red: #f87171; --ac-slate: #94a3b8;
+}
+
+/* filled buttons (black / lime / red / amber) keep their own colour; only neutral surfaces get accents */
+
+/* the colour is set on <use>; the icon's strokes inherit it (stroke = currentColor) */
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .mini .circle-ic, .usage-card .circle-ic, .sr-item) :is(
+  use[href="#i-code"], use[href="#i-edit"], use[href="#i-file-plus"], use[href="#i-format"]) { color: var(--ac-violet); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .mini .circle-ic, .usage-card .circle-ic, .sr-item) :is(
+  use[href="#i-logs"], use[href="#i-eye"], use[href="#i-search"], use[href="#i-filter"], use[href="#i-map"], use[href="#i-info"], use[href="#i-disk"]) { color: var(--ac-sky); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-git"], use[href="#i-diff"], use[href="#i-undo"]) { color: var(--ac-git); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-folder"], use[href="#i-folder-plus"], use[href="#i-folder-open"]) { color: var(--ac-folder); }
+:is(.b-grey, .b-ghost, .b-outline, .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-upload"], use[href="#i-download"]) { color: var(--ac-teal); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-key"], use[href="#i-shield"]) { color: var(--ac-rose); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .mini .circle-ic, .sr-item) :is(
+  use[href="#i-terminal"], use[href="#i-play"], use[href="#i-zap"], use[href="#i-rocket"], use[href="#i-clock"], use[href="#i-pulse"]) { color: var(--ac-green); }
+:is(.b-grey, .b-ghost, .b-outline, .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-refresh"], use[href="#i-rotate"], use[href="#i-bell"]) { color: var(--ac-amber); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .sr-item) :is(
+  use[href="#i-save"], use[href="#i-database"]) { color: var(--ac-blue); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .mini .circle-ic, .usage-card .circle-ic, .sr-item) :is(
+  use[href="#i-layers"], use[href="#i-box"], use[href="#i-copy"], use[href="#i-paste"], use[href="#i-memory"], use[href="#i-cpu"], use[href="#i-grid"]) { color: var(--ac-indigo); }
+:is(.b-grey, .b-ghost, .b-outline, .ctx button, .icon-btn.sm) :is(
+  use[href="#i-trash"], use[href="#i-x"], use[href="#i-power"], use[href="#i-stop"]) { color: var(--ac-red); }
+:is(.b-grey, .b-ghost, .b-outline, .pill-tabs button:not(.active), .ctx button:not(.danger), .icon-btn.sm, .mini .circle-ic, .sr-item) :is(
+  use[href="#i-broom"], use[href="#i-gear"], use[href="#i-sliders"], use[href="#i-server"], use[href="#i-timer"], use[href="#i-swap"]) { color: var(--ac-slate); }
+
+/* metric tiles: one colour per metric (icon only) */
+.mini .circle-ic use[href="#i-cpu"] { color: var(--ac-violet); }
+.mini .circle-ic use[href="#i-swap"] { color: var(--ac-teal); }
+.mini .circle-ic use[href="#i-box"] { color: var(--ac-indigo); }
+.usage-card .circle-ic use[href="#i-memory"] { color: var(--ac-violet); }
+
+/* a soft hint of the same colour when hovering a neutral button */
+.b-grey:hover use, .b-ghost:hover use { filter: saturate(1.25); }
+
+/* level dot inside the "57% Used" badges: green / amber / red */
+.badge-dark { display: inline-flex; align-items: center; gap: 8px; }
+.badge-dark .lvl { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, .25); }
+.badge-dark .lvl.mid { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251, 191, 36, .25); }
+.badge-dark .lvl.hot { background: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, .25); }
+
+/* danger stays recognisable even on ghost buttons */
+.b-ghost:has(use[href="#i-x"]):hover, .b-ghost:has(use[href="#i-trash"]):hover { color: var(--ac-red); border-color: color-mix(in srgb, var(--ac-red) 40%, transparent); }
