@@ -220,9 +220,15 @@
             <div class="card-head">
               <h2>Recommended for you</h2>
               <span class="spacer"></span>
-              <div class="pager" id="recoDots"></div>
+              <div class="reco-nav">
+                <button type="button" class="pager-arrow" onclick="recoGo(-1)" title="Previous" aria-label="Previous"><svg class="ic"><use href="#i-chevron-right"/></svg></button>
+                <div class="pager" id="recoDots"></div>
+                <button type="button" class="pager-arrow next" onclick="recoGo(1)" title="Next" aria-label="Next"><svg class="ic"><use href="#i-chevron-right"/></svg></button>
+                <span class="reco-count" id="recoCount">1 / 3</span>
+              </div>
             </div>
-            <div class="reco-grid" id="recoGrid"></div>
+            <div class="reco-grid" id="recoGrid" tabindex="0" aria-roledescription="carousel" title="Swipe, drag or use the arrows to see more"></div>
+            <p class="reco-hint" id="recoHint"><svg class="ic"><use href="#i-arrow-left"/></svg> Swipe or use the arrows to see more <svg class="ic flip"><use href="#i-arrow-left"/></svg></p>
           </div>
         </div>
 

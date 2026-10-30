@@ -637,3 +637,29 @@ table.files td { padding: 9px 12px; }
 .health-chip.bad { background: var(--red-soft); color: var(--red); }
 .kbd-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px 24px; font-size: 14px; }
 .kbd-grid span { color: var(--muted); }
+
+/* "Recommended for you" carousel: arrows, counter, stretched active dot, slide, swipe hint */
+.reco-nav { display: flex; align-items: center; gap: 8px; }
+.pager-arrow { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2);
+  background: var(--card); color: var(--text); cursor: pointer; transition: background .15s, transform .1s; }
+.pager-arrow:hover { background: var(--raise); }
+.pager-arrow:active { transform: scale(.92); }
+.pager-arrow .ic { width: 16px; height: 16px; transform: rotate(180deg); }
+.pager-arrow.next .ic { transform: none; }
+.pager { align-items: center; }
+.pager button { transition: width .25s ease, background .2s; }
+.pager button.active { width: 22px; border-radius: 999px; }
+.reco-count { min-width: 38px; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.reco-grid { touch-action: pan-y; cursor: grab; transition: transform .2s ease; outline: none; }
+.reco-grid:active { cursor: grabbing; }
+.reco-grid:focus-visible { box-shadow: 0 0 0 3px rgba(169, 179, 246, .45); border-radius: 30px; }
+.reco-grid.slide-next { animation: reco-next .32s ease; }
+.reco-grid.slide-prev { animation: reco-prev .32s ease; }
+@keyframes reco-next { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes reco-prev { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+.reco-hint { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; font-size: 12.5px; color: var(--muted);
+  animation: hint-nudge 2.4s ease-in-out infinite; }
+.reco-hint .ic { width: 14px; height: 14px; }
+.reco-hint .ic.flip { transform: rotate(180deg); }
+@keyframes hint-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .reco-grid.slide-next, .reco-grid.slide-prev, .reco-hint { animation: none; } }

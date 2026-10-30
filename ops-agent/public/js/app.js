@@ -980,12 +980,67 @@
      ['Alerts', 'bell', 'c-yellow', 'What needs attention', () => openAlerts()]],
   ];
   let recoPage = 0;
-  function renderReco() {
-    $('recoDots').innerHTML = RECO_PAGES.map((_, i) => `<button type="button" class="${i === recoPage ? 'active' : ''}" onclick="recoPage=${i}; renderReco()" aria-label="Page ${i + 1}"></button>`).join('');
-    $('recoGrid').innerHTML = RECO_PAGES[recoPage].map(([label, icon, color, sub], i) =>
-      `<button type="button" class="reco-tile" onclick="RECO_PAGES[${recoPage}][${i}][4]()">
+  function renderReco(direction = 0) {
+    $('recoDots').innerHTML = RECO_PAGES.map((_, i) => `<button type="button" class="${i === recoPage ? 'active' : ''}" onclick="recoGo(${i - recoPage})" aria-label="Page ${i + 1}"></button>`).join('');
+    $('recoCount').textContent = `${recoPage + 1} / ${RECO_PAGES.length}`;
+    const grid = $('recoGrid');
+    grid.innerHTML = RECO_PAGES[recoPage].map(([label, icon, color, sub], i) =>
+      `<button type="button" class="reco-tile" onclick="if(!recoDragged)RECO_PAGES[${recoPage}][${i}][4]()">
         <span class="circle-ic ${color}">${ic(icon)}</span><span>${esc(label)}</span><small>${esc(sub)}</small></button>`).join('');
+    if (direction) { // slide in from the side we're moving towards
+      grid.classList.remove('slide-next', 'slide-prev');
+      void grid.offsetWidth;
+      grid.classList.add(direction > 0 ? 'slide-next' : 'slide-prev');
+    }
+    $('recoHint').hidden = localStorage.getItem('opsRecoSwiped') === '1';
   }
+
+  // Move by n pages (wraps around). Any use of the carousel hides the hint for good.
+  function recoGo(n) {
+    if (!n) return;
+    recoPage = (recoPage + n + RECO_PAGES.length) % RECO_PAGES.length;
+    localStorage.setItem('opsRecoSwiped', '1');
+    renderReco(n);
+  }
+
+  // Swipe with a finger or drag with the mouse; ← → keys when the tiles have focus.
+  let recoDragged = false;
+  (() => {
+    const grid = $('recoGrid');
+    let startX = null, startY = 0;
+    grid.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; recoDragged = false; });
+    grid.addEventListener('pointermove', (e) => {
+      if (startX === null) return;
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - startY)) grid.style.transform = `translateX(${dx * 0.35}px)`;
+    });
+    const end = (e) => {
+      if (startX === null) return;
+      const dx = e.clientX - startX;
+      startX = null;
+      grid.style.transform = '';
+      if (Math.abs(dx) > 50) {
+        recoDragged = true; // don't treat the swipe as a click on a tile
+        setTimeout(() => { recoDragged = false; }, 50);
+        recoGo(dx < 0 ? 1 : -1);
+      }
+    };
+    grid.addEventListener('pointerup', end);
+    grid.addEventListener('pointerleave', end);
+    grid.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); recoGo(1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); recoGo(-1); }
+    });
+    // two-finger sideways scroll on a trackpad
+    let wheelLock = 0;
+    grid.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaX) < 30 || Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      if (Date.now() < wheelLock) return;
+      wheelLock = Date.now() + 600;
+      recoGo(e.deltaX > 0 ? 1 : -1);
+    }, { passive: false });
+  })();
 
   // ── statistics chart: stacked bars with hatched headroom ──
   let samples = [];
