@@ -248,8 +248,10 @@ const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const { version: AGENT_VERSION } = require('./package.json');
+
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, agent: AGENT_NAME, uptimeSec: Math.round(process.uptime()), terminal: pty ? 'pty' : 'script' });
+  res.json({ success: true, agent: AGENT_NAME, version: AGENT_VERSION, uptimeSec: Math.round(process.uptime()), terminal: pty ? 'pty' : 'script' });
 });
 
 app.use('/api', (req, res, next) => {
