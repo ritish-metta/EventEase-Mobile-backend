@@ -13,6 +13,8 @@ jobs:
   build:
     name: Install & check
     runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
     steps:
       - uses: actions/checkout@v5
 
@@ -27,12 +29,21 @@ jobs:
       - name: Syntax check
         run: node --check app.js
 
+      # Deploy gate: set "enabled": false in deploy.json to skip deploying
+      - name: Read deploy gate
+        id: gate
+        run: |
+          ENABLED=$(node -p "require('./deploy.json').enabled === false ? 'false' : 'true'")
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+          echo "Deploy enabled: $ENABLED"
+
   deploy:
     name: Deploy to instance
     needs: build
-    # On/off switch: repo Settings → Secrets and variables → Actions → Variables
-    # DEPLOY_ENABLED = false pauses auto-deploy. Missing or true = deploy.
-    if: vars.DEPLOY_ENABLED != 'false'
+    # Two off switches — either one set to false skips the deploy:
+    #   1. deploy.json → "enabled": false            (in the code)
+    #   2. GitHub repo variable DEPLOY_ENABLED=false (Settings → Secrets and variables → Actions → Variables)
+    if: needs.build.outputs.enabled == 'true' && vars.DEPLOY_ENABLED != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
@@ -48,9 +59,34 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             npm ci --omit=dev
-            if pm2 describe eventease_backend > /dev/null 2>&1; then
-              pm2 reload eventease_backend --update-env
+            APP=eventease_backend
+            STATUS=$(pm2 jlist | node -e "
+              const list = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+              const mine = list.filter((p) => p.name === '$APP');
+              console.log(!mine.length ? 'missing' : mine.some((p) => p.pm2_env.status === 'online') ? 'online' : 'stopped');
+            ")
+            echo "Current status: $STATUS"
+            if [ "$STATUS" = "missing" ]; then
+              # not registered in pm2 at all → create it
+              pm2 start app.js -i 1 --name $APP
+            elif [ "$STATUS" = "online" ]; then
+              # running → zero-downtime reload
+              pm2 reload $APP --update-env
             else
-              pm2 start app.js -i 1 --name eventease_backend
+              # stopped / errored → start it again
+              pm2 restart $APP --update-env
             fi
             pm2 save
+
+            # health check: fail the pipeline if the app doesn't come up
+            for i in $(seq 1 15); do
+              if curl -sf http://localhost:5000/api > /dev/null; then
+                echo "✅ App is up"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "❌ App did not respond on port 5000 after deploy"
+            pm2 list
+            pm2 logs $APP --lines 40 --nostream
+            exit 1
