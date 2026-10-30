@@ -121,9 +121,10 @@ kbd { font: 500 10.5px 'JetBrains Mono', monospace; color: var(--muted); backgro
 [hidden] { display: none !important; }
 
 /* ── Frame: black rail + white sheet ───────────── */
+/* fills the whole browser window, edge to edge */
 .frame {
-  position: relative; display: flex; height: calc(100vh - 48px); margin: 24px;
-  border-radius: 40px; overflow: hidden; background: var(--frame); box-shadow: var(--shadow);
+  position: relative; display: flex; height: 100vh; margin: 0;
+  overflow: hidden; background: var(--frame);
 }
 .rail {
   width: 96px; flex: none; display: flex; flex-direction: column; align-items: center;

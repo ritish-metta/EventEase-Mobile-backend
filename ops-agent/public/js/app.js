@@ -150,8 +150,6 @@
     activeTab = name;
     activeGroup = groupOf(name);
     lastTabInGroup[activeGroup] = name;
-    document.body.dataset.section = activeGroup; // section colour (green / orange / sky)
-    $('secChip').textContent = activeGroup;
     renderPillTabs();
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + name));
     const [title, sub, , light, label] = PAGES[name] || [name, '', '', '', name];
@@ -183,7 +181,7 @@
       $('connDot').className = 'dot on';
       $('hostName').textContent = s.hostname;
       $('hostInfo').textContent = `${s.user} · Node ${s.node} · ${s.cpus} vCPU`;
-      if (serverUser !== s.user) { serverUser = s.user; tickClock(); }
+      serverUser = s.user;
       const load = s.loadAvg[0];
       $('cpuVal').textContent = `${load.toFixed(2)} / ${s.cpus}`;
       setBar('cpuBar', (load / s.cpus) * 100);
@@ -975,8 +973,8 @@
   const BARS = 10;
 
   const METRICS = {
-    load: { parts: [['cpu', 'CPU', '--cpu'], ['mem', 'Memory', '--mem']], fmt: (v) => Math.round(v) + '%', max: () => 100 },
-    net: { parts: [['rx', 'In', '--net-in'], ['tx', 'Out', '--net-out']], fmt: (v) => fmtBytes(v) + '/s', max: (vals) => Math.max(1024, ...vals) * 1.15 },
+    load: { parts: [['cpu', 'CPU', '--blue'], ['mem', 'Memory', '--pink']], fmt: (v) => Math.round(v) + '%', max: () => 100 },
+    net: { parts: [['rx', 'In', '#a9e3c4'], ['tx', 'Out', '#f9d38c']], fmt: (v) => fmtBytes(v) + '/s', max: (vals) => Math.max(1024, ...vals) * 1.15 },
   };
 
   $('chartTabs').addEventListener('click', (e) => {
@@ -1473,9 +1471,6 @@
   // ── live clock in the date pill ──
   function tickClock() {
     const d = new Date();
-    const h = d.getHours();
-    const part = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Working late';
-    $('greeting').textContent = `${part}, ${serverUser || 'there'} 👋`;
     $('clockPill').textContent = d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
       + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
