@@ -669,7 +669,8 @@ app.get('/api/files', (req, res) => {
         // broken symlink
       }
       return { name: d.name, type: d.isDirectory() ? 'dir' : 'file', size, mtime };
-    }).sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+    }).filter((e) => !SYSTEM_DIRS.includes(path.join(target, e.name)))
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
     return res.json({ success: true, type: 'dir', path: target, home: HOME, entries });
   }
 
@@ -679,8 +680,10 @@ app.get('/api/files', (req, res) => {
   res.json({ success: true, type: 'file', path: target, home: HOME, content: buf.toString('utf8') });
 });
 
-// Deleting or renaming these would lock you out (ssh keys) or kill every app (PM2 state).
-const PROTECTED_DIRS = ['.ssh', '.pm2'].map((d) => path.join(HOME, d));
+// Deleting or renaming these would lock you out (ssh keys), kill every app (PM2 state),
+// or break this dashboard itself (its own folder and its backups).
+const SYSTEM_DIRS = [__dirname, path.join(HOME, 'ops-backups')]; // hidden from the Files list
+const PROTECTED_DIRS = [...['.ssh', '.pm2'].map((d) => path.join(HOME, d)), ...SYSTEM_DIRS];
 const isProtected = (p) => p === HOME || PROTECTED_DIRS.some((d) => p === d || p.startsWith(d + path.sep));
 
 const homePath = (p, what = 'path') => {

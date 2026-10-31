@@ -6,6 +6,49 @@
   // inline icon from the sprite in index.html
   const ic = (name, cls = '') => `<svg class="ic ${cls}"><use href="#i-${name}"/></svg>`;
 
+  // ── clipboard (works on plain http:// too) ──
+  // navigator.clipboard only exists on https:// or localhost; the panel usually runs on
+  // http://<ip>:7000, so fall back to a hidden textarea + execCommand('copy').
+  function copyText(text) {
+    if (!text) return;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+    } else legacyCopy(text);
+  }
+  function legacyCopy(text) {
+    const active = document.activeElement;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch { /* nothing else we can do */ }
+    ta.remove();
+    active?.focus?.();
+  }
+
+  // Copy / paste for an xterm terminal:
+  //   Ctrl+C with text selected → copy (no selection → ^C stops the running command, as usual)
+  //   Ctrl+Shift+C → copy     Ctrl+V / Ctrl+Shift+V → paste
+  // xterm normally turns Ctrl+V into a ^V key press and blocks the browser's paste; returning
+  // false here lets the browser paste into xterm's hidden textarea, which xterm sends as input.
+  function wireTermClipboard(term) {
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown' || !(e.ctrlKey || e.metaKey) || e.altKey) return true;
+      const k = e.key.toLowerCase();
+      if (k === 'c' && (e.shiftKey || term.hasSelection())) {
+        e.preventDefault(); // Ctrl+Shift+C would open the browser's inspector
+        copyText(term.getSelection());
+        term.clearSelection();
+        term.focus();
+        return false;
+      }
+      if (k === 'v') return false;
+      return true;
+    });
+  }
+
   // ── formatting ──────────────────────────
   const fmtBytes = (b) => {
     if (!b) return '0 B';
@@ -122,11 +165,12 @@
     cron: ['Jobs', 'Tasks that run on a schedule', 'timer', 'Cron', 'Cron jobs'],
     security: ['Center', 'Logins, blocked IPs and the audit log', 'shield', 'Security', 'Security'],
     settings: ['Settings', 'Alerts, thresholds and quick commands', 'sliders', 'Panel', 'Settings'],
+    guide: ['Guide', 'How to set up and use OpsEdge, step by step', 'book', 'User', 'Guide'],
   };
   const GROUPS = {
     monitor: ['overview', 'projects', 'monitors', 'activity'],
     build: ['code', 'terminal', 'files', 'logs'],
-    system: ['services', 'redis', 'cron', 'security', 'settings'],
+    system: ['services', 'redis', 'cron', 'security', 'settings', 'guide'],
   };
   const groupOf = (tab) => Object.keys(GROUPS).find((g) => GROUPS[g].includes(tab)) || 'monitor';
   const lastTabInGroup = {};
@@ -763,7 +807,8 @@
   }
 
   function copyPath(p) {
-    navigator.clipboard?.writeText(p).then(() => toast('Copied: ' + p, 'ok'), () => prompt('Copy this path:', p));
+    copyText(p);
+    toast('Copied: ' + p, 'ok');
   }
 
   async function uploadFiles(fileList) {
@@ -990,25 +1035,7 @@
       term.loadAddon(fit);
       term.open($('terminal'));
       term.onData((d) => termSocket?.emit('input', d));
-      // Fix Ctrl+V paste in the terminal tab
-      $('terminal').addEventListener('paste', (e) => {
-        e.preventDefault();
-        const text = e.clipboardData?.getData('text') || '';
-        if (text) termSocket?.emit('input', text);
-      });
-      // Fix copy: Ctrl+C copies selection if text is selected, otherwise sends ^C (SIGINT).
-      // Ctrl+Shift+C always copies regardless of selection.
-      $('terminal').addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.shiftKey) {
-          const sel = term.getSelection();
-          if (sel) { e.preventDefault(); navigator.clipboard.writeText(sel).catch(() => {}); }
-        }
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
-          e.preventDefault();
-          const sel = term.getSelection();
-          if (sel) navigator.clipboard.writeText(sel).catch(() => {});
-        }
-      });
+      wireTermClipboard(term);
       window.addEventListener('resize', fitTerm);
     }
     term.reset();

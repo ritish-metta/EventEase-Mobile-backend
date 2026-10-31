@@ -645,28 +645,7 @@
     term.loadAddon(fit);
     term.open(el);
 
-    // Fix Ctrl+V paste — xterm.js doesn't intercept the browser paste event in all browsers.
-    // Listening on the terminal's DOM element captures it and sends it through the socket.
-    el.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const text = e.clipboardData?.getData('text') || '';
-      if (text) s.socket?.emit('input', text);
-    });
-
-    // Fix copy: Ctrl+C copies selection if text is selected, otherwise sends ^C (SIGINT).
-    // Ctrl+Shift+C always copies regardless of selection.
-    el.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.shiftKey) {
-        const sel = term.getSelection();
-        if (sel) { e.preventDefault(); navigator.clipboard.writeText(sel).catch(() => {}); }
-        // no selection → let xterm pass ^C through to the shell normally
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        const sel = term.getSelection();
-        if (sel) navigator.clipboard.writeText(sel).catch(() => {});
-      }
-    });
+    wireTermClipboard(term);
 
     const s = { id: ++termSeq, term, fit, socket: null, cwd, el, alive: true };
     termSessions.push(s);

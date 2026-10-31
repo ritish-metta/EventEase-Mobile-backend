@@ -120,6 +120,7 @@
       <button type="button" data-group="system" title="System"><svg class="ic"><use href="#i-server"/></svg><span>System</span></button>
     </nav>
     <div class="rail-bottom">
+      <button type="button" class="rail-btn" onclick="showTab('guide')" title="Guide" aria-label="Guide"><svg class="ic"><use href="#i-help"/></svg></button>
       <button type="button" class="rail-btn" onclick="toggleTheme()" title="Light / dark" aria-label="Switch theme"><svg class="ic" id="themeIcon"><use href="#i-moon"/></svg></button>
       <button type="button" class="rail-btn" id="alertBell" onclick="openAlerts()" title="Alerts" aria-label="Alerts"><svg class="ic"><use href="#i-bell"/></svg><span class="bell-dot" id="alertCount">0</span></button>
       <button type="button" class="rail-btn" onclick="logout()" title="Log out" aria-label="Log out"><svg class="ic"><use href="#i-logout"/></svg></button>
@@ -598,6 +599,90 @@
           </div>
         </div>
         <button type="button" class="b-lime" onclick="saveSettings()"><svg class="ic"><use href="#i-save"/></svg>Save settings</button>
+      </section>
+
+      <!-- ── Guide ───────────────────────────── -->
+      <section class="tab" id="tab-guide">
+        <div class="card guide">
+          <div class="card-head"><h2>1. First setup on the server</h2></div>
+          <ol>
+            <li>Install Node.js 22+, git and PM2: <code>sudo npm i -g pm2</code></li>
+            <li>Get OpsEdge: <code>git clone &lt;opsedge-repo&gt; ~/opsedge &amp;&amp; cd ~/opsedge &amp;&amp; bash install.sh</code></li>
+            <li>The installer creates a password. See it with <code>grep OPS_TOKEN ~/opsedge/.env</code></li>
+            <li>In AWS: <b>EC2 → your server → Security → security group → Edit inbound rules</b>. Add <b>Custom TCP, port 7000, Source: My IP</b>.</li>
+            <li>Open <code>http://&lt;server-public-ip&gt;:7000</code> (http, not https) and log in with the password.</li>
+          </ol>
+          <p class="muted">Find the public IP on the server with <code>curl -s ifconfig.me</code>, or in AWS under <b>EC2 → Instances → Public IPv4 address</b>.</p>
+        </div>
+
+        <div class="grid">
+          <div class="card guide">
+            <div class="card-head"><h2>2a. Deploy a project from git</h2></div>
+            <ol>
+              <li>Click <b>Deploy a project</b> (top right).</li>
+              <li>Fill in a name, the repo URL, the branch and the start file (for example <code>app.js</code>).</li>
+              <li>OpsEdge clones it into your home folder, installs packages and starts it with PM2.</li>
+              <li>Later updates: <b>Projects → Deploy</b> pulls the latest code and restarts it.</li>
+            </ol>
+          </div>
+          <div class="card guide">
+            <div class="card-head"><h2>2b. Deploy by uploading a folder</h2></div>
+            <ol>
+              <li>Open <b>Build → Files</b> and stay in the home folder.</li>
+              <li>Drag your project folder onto the Files card (node_modules and .git are skipped).</li>
+              <li>Open <b>Build → Terminal</b> and run:<br>
+                <code>cd ~/my-app</code><br>
+                <code>npm install</code> (only if it has packages)<br>
+                <code>pm2 start app.js --name my-app</code><br>
+                <code>pm2 save</code></li>
+              <li>It now shows in <b>Monitor → Projects</b>. To update: upload the changed files again, then <b>Restart</b>.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card guide">
+            <div class="card-head"><h2>3. Open your app in the browser</h2></div>
+            <ol>
+              <li>Check which port the app uses (often 3000 or 5000).</li>
+              <li>In AWS, add an inbound rule for that port: <b>Custom TCP, that port, Source: My IP</b>.</li>
+              <li>Open <code>http://&lt;server-public-ip&gt;:&lt;port&gt;</code>.</li>
+            </ol>
+            <p class="muted">Your home internet IP can change. If a page suddenly times out, update the rule's Source to your new IP (or your range, for example <code>103.24.22.0/24</code>).</p>
+          </div>
+          <div class="card guide">
+            <div class="card-head"><h2>4. Daily use</h2></div>
+            <ul>
+              <li><b>Projects</b>: start, stop, restart, logs, backups, delete.</li>
+              <li><b>Monitors</b>: add a URL to watch. You get an alert when it goes down. Delete monitors of apps you removed.</li>
+              <li><b>Code</b> and <b>Files</b>: edit files on the server, then restart the project.</li>
+              <li><b>Settings</b>: add a Discord or Slack webhook to get alerts on your phone.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card guide">
+            <div class="card-head"><h2>Protected folders</h2></div>
+            <p>These folders keep OpsEdge running. They are hidden from Files and cannot be deleted or renamed here:</p>
+            <ul>
+              <li><code>~/opsedge</code>: the dashboard itself. Deleting it shuts the dashboard down.</li>
+              <li><code>~/ops-backups</code>: your project backups.</li>
+              <li><code>~/.ssh</code> and <code>~/.pm2</code>: server login keys and the list of running apps.</li>
+            </ul>
+            <p class="muted">Do not delete them from the Terminal either.</p>
+          </div>
+          <div class="card guide">
+            <div class="card-head"><h2>Problems and fixes</h2></div>
+            <ul>
+              <li><b>"Too many wrong tokens, locked for 15 minutes"</b>: wait 15 minutes, or run <code>pm2 restart ops-agent</code> on the server. Get the right password with <code>grep OPS_TOKEN ~/opsedge/.env</code>.</li>
+              <li><b>Page does not load / times out</b>: the port is not open for your current IP in the AWS security group.</li>
+              <li><b>Page says connection refused</b>: the app is not running. Check <code>pm2 list</code> and the project's Logs.</li>
+              <li><b>pm2 error "uv_cwd"</b>: your terminal is in a deleted folder. Run <code>cd ~</code> first.</li>
+              <li><b>Monitor says DOWN (ECONNREFUSED)</b>: the app it checks is stopped or was removed.</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
     </main>
