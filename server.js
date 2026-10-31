@@ -311,6 +311,11 @@ const ctx = {
   AGENT_NAME,
   CLEAN_ENV,
   emit: (event, data) => opsNs?.emit(event, data),
+  // defined further down; wrapped so features can use them once the server runs
+  HOME,
+  homePath: (p, what) => homePath(p, what),
+  isProtected: (p) => isProtected(p),
+  get installCmd() { return installCmd; },
 };
 const security = require('./features/security')(ctx);
 app.use('/api', security.auditMiddleware);
@@ -323,6 +328,19 @@ require('./features/redis')(ctx);
 require('./features/cron')(ctx);
 const backups = require('./features/backups')(ctx);
 require('./features/gitaccess')(ctx);
+
+// Deploy settings per project (start / install / build command, port), saved by the
+// deploy form so Transfer → Apply can install and build the same way later.
+const store = require('./features/store');
+const deploySettings = store.load('deploys', {});
+const deploys = {
+  get: (name) => deploySettings[name],
+  set(name, value) {
+    deploySettings[name] = { ...value, savedAt: Date.now() };
+    store.save('deploys', deploySettings);
+  },
+};
+require('./features/transfer')(ctx, { backups, deploys });
 
 // Pending Ubuntu updates, cached — apt-check takes a second or two.
 let updatesCache = { at: 0, value: null };
@@ -500,6 +518,10 @@ app.post('/api/projects', async (req, res) => {
     'pm2 save',
     `echo "✅ ${name} is running. See it in Projects."`,
   ].join('\n'), { project: name, kind: 'start' });
+  deploys.set(name, {
+    source, repo: source === 'git' ? repo : undefined, branch: source === 'git' ? branch : undefined,
+    dir: target, startCmd, installCmd: install, buildCmd: build, port: env.get('PORT'),
+  });
   res.json({ success: true, message: `Deploying ${name}…`, jobId: job.id });
 });
 

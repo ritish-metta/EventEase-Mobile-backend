@@ -18,9 +18,15 @@ module.exports = function backups(ctx) {
   const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 
   // Shell command that snapshots a project; also used by "Delete completely".
-  function backupCommand(proj) {
-    const file = `${proj.name.replace(/[^\w.-]/g, '_')}__${stamp()}.tar.gz`;
+  // auto: made by Transfer → Apply (only the newest few of those are kept, see pruneAuto)
+  function backupCommand(proj, { auto = false } = {}) {
+    let file = `${proj.name.replace(/[^\w.-]/g, '_')}__${stamp()}.tar.gz`;
+    for (let n = 1; index[file] || fs.existsSync(path.join(BACKUP_DIR, file)); n++) { // two backups in the same second
+      const t = new Date(Date.now() + n * 1000).toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+      file = `${proj.name.replace(/[^\w.-]/g, '_')}__${t}.tar.gz`;
+    }
     index[file] = {
+      auto,
       project: proj.name,
       cwd: proj.cwd,
       script: proj.script,
@@ -32,7 +38,10 @@ module.exports = function backups(ctx) {
     const dest = path.join(BACKUP_DIR, file);
     return {
       file,
-      command: `tar -czf ${ctx.q(dest)} --exclude=node_modules --exclude=.git -C ${ctx.q(path.dirname(proj.cwd))} ${ctx.q(path.basename(proj.cwd))} && echo "💾 Backup saved: ${dest} ($(du -h ${ctx.q(dest)} | cut -f1))"`,
+      // a failed backup must stop the whole job ("&&" alone would not, even under set -e),
+      // so nothing is changed or deleted without a working snapshot
+      command: `tar -czf ${ctx.q(dest)} --exclude=node_modules --exclude=.git -C ${ctx.q(path.dirname(proj.cwd))} ${ctx.q(path.basename(proj.cwd))} || { rm -f ${ctx.q(dest)}; echo "❌ Backup failed, stopping here so nothing is lost"; exit 1; }
+echo "💾 Backup saved: ${dest} ($(du -h ${ctx.q(dest)} | cut -f1))"`,
     };
   }
 
@@ -95,5 +104,16 @@ module.exports = function backups(ctx) {
     res.json({ success: true, message: 'Backup deleted' });
   });
 
-  return { backupCommand, BACKUP_DIR };
+  // Delete the oldest automatic backups of a project, keeping `keep` of them.
+  function pruneAuto(project, keep) {
+    const auto = Object.entries(index).filter(([, m]) => m.auto && m.project === project)
+      .sort((a, b) => b[1].createdAt - a[1].createdAt);
+    for (const [file] of auto.slice(Math.max(0, keep))) {
+      fs.rmSync(path.join(BACKUP_DIR, file), { force: true });
+      delete index[file];
+    }
+    store.save('backups', index);
+  }
+
+  return { backupCommand, pruneAuto, BACKUP_DIR };
 };

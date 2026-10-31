@@ -200,6 +200,7 @@
     code: ['Editor', 'Edit your projects right on the server', 'code', 'Code', 'Code'],
     terminal: ['Terminal', 'A full shell on the server, in your browser', 'terminal', 'Server', 'Terminal'],
     files: ['Manager', 'Browse, edit, upload and download files', 'folder', 'File', 'Files'],
+    transfer: ['Transfer', 'Upload to a project, apply it and see if it is live', 'swap', 'File', 'Transfer'],
     logs: ['Logs', 'Output and error logs of every project', 'logs', 'Project', 'Logs'],
     services: ['Services', 'System services like Redis, nginx and cron', 'server', 'System', 'Services'],
     redis: ['Cache', 'Cache statistics and key browser', 'database', 'Redis', 'Redis'],
@@ -210,7 +211,7 @@
   };
   const GROUPS = {
     monitor: ['overview', 'projects', 'monitors', 'activity'],
-    build: ['code', 'terminal', 'files', 'logs'],
+    build: ['code', 'terminal', 'files', 'transfer', 'logs'],
     system: ['services', 'redis', 'cron', 'security', 'settings', 'guide'],
   };
   const groupOf = (tab) => Object.keys(GROUPS).find((g) => GROUPS[g].includes(tab)) || 'monitor';
@@ -268,6 +269,7 @@
     if (name === 'projects') loadProjects();
     if (name === 'services') loadServices();
     if (name === 'files' && !currentDir) browse('');
+    if (name === 'transfer') initTransfer();
     if (name === 'logs') fillLogProjects();
     if (name === 'terminal') { if (!termSocket) newTerminal(); else setTimeout(fitTerm, 30); }
     if (name === 'overview') setTimeout(drawCharts, 30);
@@ -929,6 +931,7 @@ API_KEY=..."></textarea>
       $('fileText').dispatchEvent(new Event('input'));
       if (!stayOpen) closeModal();
       browse(currentDir, false);
+      window.onFileSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   }
 

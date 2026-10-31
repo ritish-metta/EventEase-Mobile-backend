@@ -611,6 +611,73 @@
         <button type="button" class="b-lime" onclick="saveSettings()"><svg class="ic"><use href="#i-save"/></svg>Save settings</button>
       </section>
 
+      <!-- ── Transfer ────────────────────────── -->
+      <section class="tab" id="tab-transfer">
+        <div class="card tx-head">
+          <div class="tx-projects" id="txProjects"></div>
+          <div class="tx-info" id="txInfo"></div>
+        </div>
+
+        <div class="tx-panes">
+          <div class="card tx-pane">
+            <div class="card-head"><h2>Your PC</h2><span class="muted small" id="txTarget"></span></div>
+            <div class="tx-drop" id="txDrop">
+              <svg class="ic"><use href="#i-upload"/></svg>
+              <b>Drop files or a whole folder here</b>
+              <span class="muted small">node_modules and .git are skipped · hidden files like .env are included</span>
+              <div class="row">
+                <button type="button" class="b-grey" onclick="$('txPickFolder').click()"><svg class="ic"><use href="#i-folder-plus"/></svg>Pick folder</button>
+                <button type="button" class="b-grey" onclick="$('txPickFiles').click()"><svg class="ic"><use href="#i-file-plus"/></svg>Pick files</button>
+              </div>
+              <input type="file" id="txPickFolder" webkitdirectory multiple hidden onchange="txPicked(this.files, 'folder'); this.value=''">
+              <input type="file" id="txPickFiles" multiple hidden onchange="txPicked(this.files, 'files'); this.value=''">
+            </div>
+            <p class="muted small" id="txEmpty">Files you add are compared with the server first: only <b>new</b> and <b>changed</b> files are uploaded.</p>
+            <div id="txQueueWrap" hidden>
+              <label class="check mt" id="txStripBox" hidden><input type="checkbox" id="txStrip" checked onchange="txToggleStrip()">
+                <span>Upload what is <b>inside</b> "<span id="txStripName"></span>" (not the folder itself)</span></label>
+              <div class="row mt"><span id="txSummary"></span><span class="spacer"></span>
+                <label class="check"><input type="checkbox" id="txShowSame" onchange="txRenderQueue()"><span>Show same</span></label></div>
+              <div class="notice warn mt" id="txEnvWarn" hidden><svg class="ic"><use href="#i-alert"/></svg><span>Your <b>.env</b> is different from the server's. Uploading it replaces the server's passwords and keys. Untick it to keep the server's.</span></div>
+              <div class="table-wrap mt tx-scroll"><table class="files"><tbody id="txQueue"></tbody></table></div>
+              <div class="tx-progress" id="txProgress" hidden><div class="tx-bar big"><div id="txOverall"></div></div>
+                <button type="button" class="b-ghost" onclick="txCancel()">Cancel</button></div>
+              <div class="row mt">
+                <button type="button" class="b-primary" id="txUploadBtn" onclick="txUpload()">Upload</button>
+                <button type="button" class="b-grey" id="txClearBtn" onclick="txClear()"><svg class="ic"><use href="#i-x"/></svg>Clear</button>
+                <button type="button" class="b-ghost" onclick="txCompare()" title="Compare again"><svg class="ic"><use href="#i-refresh"/></svg>Compare again</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card tx-pane">
+            <div class="card-head"><h2>Server</h2><span class="spacer"></span>
+              <div class="input-ic"><svg class="ic"><use href="#i-filter"/></svg><input id="txFilter" placeholder="Filter…" oninput="txRenderServer()"></div>
+              <label class="check"><input type="checkbox" id="txHidden" checked onchange="txRenderServer()"><span>Hidden</span></label></div>
+            <div class="row">
+              <button type="button" class="icon-btn" id="txUp" onclick="txUp()" title="Up one folder (Backspace)" aria-label="Up one folder"><svg class="ic"><use href="#i-arrow-up"/></svg></button>
+              <span class="crumbs grow" id="txCrumbs"></span>
+              <button type="button" class="icon-btn" onclick="txBrowse(tx.dir)" title="Refresh" aria-label="Refresh"><svg class="ic"><use href="#i-refresh"/></svg></button>
+              <button type="button" class="icon-btn" onclick="txNewFolder()" title="New folder" aria-label="New folder"><svg class="ic"><use href="#i-folder-plus"/></svg></button>
+              <button type="button" class="icon-btn" onclick="downloadFolder(tx.dir)" title="Download this folder" aria-label="Download this folder"><svg class="ic"><use href="#i-download"/></svg></button>
+            </div>
+            <div class="table-wrap mt tx-scroll"><table class="files"><tbody id="txServerList"></tbody></table></div>
+            <p class="muted small">Uploads go into the folder shown here. Keys: <kbd>Enter</kbd> open · <kbd>F2</kbd> rename · <kbd>Del</kbd> delete · <kbd>Backspace</kbd> up · <kbd>↑</kbd><kbd>↓</kbd> move.</p>
+          </div>
+        </div>
+
+        <div class="card" id="txApplyCard" hidden>
+          <div class="card-head"><h2>Apply &amp; deploy</h2></div>
+          <div id="txApplyBody"></div>
+          <div class="row mt" id="txApplyFoot"></div>
+        </div>
+
+        <div class="card" id="txHistoryCard" hidden>
+          <div class="card-head"><h2>History</h2><span class="muted small">Last 20 applies of this project</span></div>
+          <div class="table-wrap"><table><tbody id="txHistory"></tbody></table></div>
+        </div>
+      </section>
+
       <!-- ── Guide ───────────────────────────── -->
       <section class="tab" id="tab-guide">
         <div class="card guide">
@@ -642,7 +709,7 @@
               <li>Drag your project folder onto the Files card (node_modules and .git are skipped).</li>
               <li>Click <b>Deploy a project</b> (top right), pick <b>Uploaded folder</b> and choose it.</li>
               <li>The start command is read from its <code>package.json</code>. Paste your <b>.env</b> lines if it needs any, then click <b>Deploy</b>. No terminal needed.</li>
-              <li>It now shows in <b>Monitor → Projects</b>. To update: upload the changed files again, then <b>Restart</b>.</li>
+              <li>It now shows in <b>Monitor → Projects</b>. To update it later, use <b>Build → Transfer</b>: pick the project, drop the folder, upload what changed and click <b>Apply &amp; deploy</b>.</li>
             </ol>
           </div>
         </div>
@@ -753,6 +820,7 @@
 <script src="js/app.js"></script>
 <script src="js/code.js"></script>
 <script src="js/deploy.js"></script>
+<script src="js/transfer.js"></script>
 <script>start0();</script>
 </body>
 </html>
