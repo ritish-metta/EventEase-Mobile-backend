@@ -25,7 +25,7 @@ For the full terminal (resize support) install build tools before running it: `s
 
 ## Update
 
-Automatic: every push to `main` deploys OpsEdge to the server through GitHub Actions (`.github/workflows/deploy.yml`): it clones or updates `~/opsedge`, runs `install.sh` and checks `/api/health`. Set `"enabled": false` in `deploy.json` to pause it. Needed repo secrets: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`.
+Automatic: every push to `main` deploys OpsEdge to the server through GitHub Actions (`.github/workflows/deploy.yml`): it clones or updates `~/opsedge`, runs `install.sh` and checks `/api/health`. Set `"enabled": false` in `deploy.json` to pause it. Needed repo secrets: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`. You can follow each run in the repository's **Actions** tab.
 
 Manual:
 
