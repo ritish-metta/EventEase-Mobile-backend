@@ -313,6 +313,7 @@ const ctx = {
   emit: (event, data) => opsNs?.emit(event, data),
   // defined further down; wrapped so features can use them once the server runs
   HOME,
+  PANEL_PORT: PORT,
   homePath: (p, what) => homePath(p, what),
   isProtected: (p) => isProtected(p),
   get installCmd() { return installCmd; },

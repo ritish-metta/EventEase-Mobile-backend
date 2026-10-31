@@ -64,19 +64,41 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     return all;
   }
 
-  // TCP ports the project's processes listen on (via `ss`)
+  // listening TCP sockets: inode -> port, from /proc/net/tcp{,6} (state 0A = LISTEN)
+  function listeningInodes() {
+    const map = new Map();
+    for (const file of ['/proc/net/tcp', '/proc/net/tcp6']) {
+      let text = '';
+      try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+      for (const line of text.split('\n').slice(1)) {
+        const cols = line.trim().split(/\s+/);
+        if (cols[3] !== '0A') continue;
+        const port = parseInt(cols[1].split(':')[1], 16);
+        if (port && cols[9] && cols[9] !== '0') map.set(cols[9], port);
+      }
+    }
+    return map;
+  }
+
+  // TCP ports the project's processes (and their children, e.g. under "npm start")
+  // listen on. Reads /proc directly: `ss -p` does not show owners on every server.
   async function projectPorts(proj) {
     const pids = proj.instances.map((i) => i.pid).filter(Boolean);
     if (!pids.length) return [];
-    const [tree, ss] = await Promise.all([descendants(pids), safeRun('ss', ['-ltnpH'])]);
+    const tree = await descendants(pids);
+    const listening = listeningInodes();
     const ports = new Set();
-    for (const line of (ss || '').split('\n')) {
-      const local = line.trim().split(/\s+/)[3] || '';
-      const port = Number(local.slice(local.lastIndexOf(':') + 1));
-      const owners = [...line.matchAll(/pid=(\d+)/g)].map((m) => Number(m[1]));
-      if (port && owners.some((p) => tree.has(p))) ports.add(port);
+    for (const pid of tree) {
+      let fds = [];
+      try { fds = fs.readdirSync(`/proc/${pid}/fd`); } catch { continue; }
+      for (const fd of fds) {
+        let link = '';
+        try { link = fs.readlinkSync(`/proc/${pid}/fd/${fd}`); } catch { continue; }
+        const m = link.match(/^socket:\[(\d+)\]$/);
+        if (m && listening.has(m[1])) ports.add(listening.get(m[1]));
+      }
     }
-    return [...ports].sort((a, b) => a - b);
+    return [...ports].filter((p) => p !== ctx.PANEL_PORT).sort((a, b) => a - b);
   }
 
   // PORT from the project's .env (used when the app isn't running)
