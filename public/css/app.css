@@ -700,3 +700,16 @@ table.files td { padding: 9px 12px; }
 .guide li { margin-bottom: 6px; }
 .guide p { line-height: 1.6; }
 .guide code { background: var(--line); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
+
+/* HTML preview */
+.html-preview { width: 100%; height: 65vh; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.editor-host.with-preview #codeEditor { right: 50%; }
+.code-preview { position: absolute; top: 0; right: 0; bottom: 0; width: 50%; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--ide-bg); }
+.code-preview[hidden] { display: none; }
+.code-preview .cp-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); min-height: 30px; }
+.code-preview .cp-head > .ic { width: 13px; height: 13px; }
+.code-preview .cp-head .spacer, .crumbs-bar .spacer { flex: 1; }
+.code-preview iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+.crumb-preview { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.crumb-preview:hover, .crumb-preview.on { color: var(--text); border-color: var(--muted); }
+.crumbs-bar .crumb-preview .ic { width: 13px; height: 13px; color: inherit; }

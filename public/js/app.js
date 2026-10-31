@@ -6,6 +6,24 @@
   // inline icon from the sprite in index.html
   const ic = (name, cls = '') => `<svg class="ic ${cls}"><use href="#i-${name}"/></svg>`;
 
+  // ── HTML preview ──
+  const isHtml = (p) => /\.html?$/i.test(p || '');
+  // /preview/<key>/home/ubuntu/app/index.html (the key is fetched fresh: it changes when the panel restarts)
+  async function previewUrl(filePath) {
+    const { key } = await api('/preview-key');
+    return `/preview/${key}` + filePath.split('/').map(encodeURIComponent).join('/');
+  }
+  const PREVIEW_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups';
+  async function openHtmlPreview(filePath) {
+    try {
+      const url = await previewUrl(filePath);
+      openModal('Preview · ' + filePath.split('/').pop(),
+        `<iframe class="html-preview" sandbox="${PREVIEW_SANDBOX}" src="${esc(url)}"></iframe>
+         <p class="muted small" style="margin-top:8px">Shows the page from its files: CSS, JS and images load from its folder. Calls to its own backend (like /api/…) only work in the running app on its port.</p>`,
+        `<button type="button" class="b-grey" onclick="window.open(${js(url)}, '_blank')">${ic('maximize')}Open in new tab</button>`);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
   // ── clipboard (works on plain http:// too) ──
   // navigator.clipboard only exists on https:// or localhost; the panel usually runs on
   // http://<ip>:7000, so fall back to a hidden textarea + execCommand('copy').
@@ -698,6 +716,7 @@
         <td class="muted" onclick="browse(${p})">${e.type === 'dir' ? '' : fmtBytes(e.size)}</td>
         <td class="muted" onclick="browse(${p})">${e.mtime ? new Date(e.mtime).toLocaleString() : ''}</td>
         <td>
+          ${e.type === 'file' && isHtml(e.name) ? `<button type="button" class="b-ghost" onclick="openHtmlPreview(${p})" title="Preview page">${ic('eye')}</button>` : ''}
           ${e.type === 'file'
             ? `<button type="button" class="b-ghost" onclick="downloadFile(${p})" title="Download">${ic('download')}</button>`
             : `<button type="button" class="b-ghost" onclick="downloadFolder(${p})" title="Download folder (.tar.gz)">${ic('download')}</button>`}
@@ -719,6 +738,7 @@
       <textarea id="fileText" rows="24" spellcheck="false">${esc(f.content)}</textarea>
       <div class="muted" id="editorInfo" style="margin-top:6px"></div>`,
       `<button type="button" class="b-grey" onclick="closeEditor()"><svg class="ic"><use href="#i-arrow-left"/></svg>Back to folder</button>
+       ${isHtml(f.path) ? `<button type="button" class="b-blue" onclick="saveFile(${js(f.path)}, true).then(() => openHtmlPreview(${js(f.path)}))">${ic('eye')}Save &amp; preview</button>` : ''}
        <button type="button" class="b-green" onclick="saveFile(${js(f.path)})"><svg class="ic"><use href="#i-save"/></svg>Save (Ctrl+S)</button>`);
     const ta = $('fileText');
     const info = () => {

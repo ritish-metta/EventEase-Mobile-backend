@@ -695,6 +695,37 @@ const homePath = (p, what = 'path') => {
   return target;
 };
 
+// ── HTML preview ────────────────────────────
+// Renders an .html file from the server inside the panel (iframe). The URL carries a
+// random key instead of the panel token, and relative CSS/JS/images resolve under the
+// same /preview/<key>/… prefix, so a page's own files load too. Every response is
+// sandboxed (CSP), so the page's scripts run in an isolated origin and cannot read the
+// panel's token. The key changes on every restart of the panel.
+const PREVIEW_KEY = crypto.randomBytes(24).toString('hex');
+app.get('/api/preview-key', (req, res) => res.json({ success: true, key: PREVIEW_KEY }));
+
+app.get('/preview/:key/*rest', (req, res) => {
+  const given = Buffer.from(String(req.params.key));
+  const want = Buffer.from(PREVIEW_KEY);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
+    return res.status(403).send('Preview link expired. Open the preview again from the panel.');
+  }
+  let target = insideHome('/' + [].concat(req.params.rest).join('/'));
+  if (target && fs.existsSync(target) && fs.statSync(target).isDirectory()) target = path.join(target, 'index.html');
+  // never serve the panel's own files (its .env holds the password), ssh keys or dotfiles like .env
+  if (!target || isProtected(target) || target.split(path.sep).some((p) => p.startsWith('.'))) {
+    return res.status(403).send('This file cannot be previewed');
+  }
+  if (!fs.existsSync(target)) return res.status(404).send('Not found: ' + path.basename(target));
+  res.set({
+    'Content-Security-Policy': 'sandbox allow-scripts allow-forms allow-modals allow-popups',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store',
+  });
+  res.sendFile(target, { dotfiles: 'allow' }); // dotfiles were already refused above
+});
+
 // Every file under a folder (relative paths), for the editor's "Go to file".
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', 'coverage']);
 app.get('/api/files/tree', (req, res) => {

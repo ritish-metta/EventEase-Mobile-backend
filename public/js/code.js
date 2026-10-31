@@ -1018,7 +1018,43 @@
     if (!activeFile) { $('codeCrumbs').innerHTML = ''; return; }
     const parts = relPath(activeFile).split('/');
     $('codeCrumbs').innerHTML = `<span>${esc(baseName(codeRoot))}</span>` + parts.map((p, i) =>
-      `${ic('chevron-right')}${i === parts.length - 1 ? `${fileIcon(p)}<b>${esc(p)}</b>` : `<span>${esc(p)}</span>`}`).join('');
+      `${ic('chevron-right')}${i === parts.length - 1 ? `${fileIcon(p)}<b>${esc(p)}</b>` : `<span>${esc(p)}</span>`}`).join('')
+      + (isHtml(activeFile) ? `<span class="spacer"></span><button type="button" class="crumb-preview${previewFile ? ' on' : ''}" onclick="toggleCodePreview()" title="Open preview to the side">${ic('sidebar')}<span>Preview</span></button>` : '');
+    // the side preview follows the HTML file you are looking at
+    if (previewFile && isHtml(activeFile) && previewFile !== activeFile) showCodePreview(activeFile);
+  }
+
+  // ── HTML preview to the side (like VS Code's "Open Preview") ──
+  let previewFile = null;
+  let previewSrc = '';
+  async function showCodePreview(filePath) {
+    try {
+      previewSrc = await previewUrl(filePath);
+      previewFile = filePath;
+      $('codePreviewName').textContent = baseName(filePath);
+      $('codePreviewFrame').src = previewSrc;
+      $('codePreview').hidden = false;
+      document.querySelector('.editor-host').classList.add('with-preview');
+      updateCrumbs();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+  function closeCodePreview() {
+    previewFile = null;
+    $('codePreview').hidden = true;
+    $('codePreviewFrame').src = 'about:blank';
+    document.querySelector('.editor-host').classList.remove('with-preview');
+    updateCrumbs();
+  }
+  async function toggleCodePreview() {
+    if (previewFile) return closeCodePreview();
+    if (activeFile && isDirty(openFiles.get(activeFile))) await saveCode(activeFile).catch(() => {});
+    showCodePreview(activeFile);
+  }
+  function reloadCodePreview() {
+    if (previewFile) showCodePreview(previewFile);
+  }
+  function openCodePreviewTab() {
+    if (previewSrc) window.open(previewSrc, '_blank');
   }
 
   // ── status bar ────────────────────────────
@@ -1128,6 +1164,7 @@
     await api('/files', { method: 'PUT', body: { path: filePath, content: f.model.getValue() } });
     f.savedVersion = version;
     renderCodeTabs();
+    if (previewFile) reloadCodePreview();
   }
 
   async function saveActiveCode() {

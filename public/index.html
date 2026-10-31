@@ -333,6 +333,16 @@
               <div class="crumbs-bar" id="codeCrumbs"></div>
               <div class="editor-host">
                 <div id="codeEditor"></div>
+                <div class="code-preview" id="codePreview" hidden>
+                  <div class="cp-head">
+                    <svg class="ic"><use href="#i-eye"/></svg><span id="codePreviewName">Preview</span>
+                    <span class="spacer"></span>
+                    <button type="button" class="icon-btn sm" onclick="reloadCodePreview()" title="Reload preview" aria-label="Reload preview"><svg class="ic"><use href="#i-refresh"/></svg></button>
+                    <button type="button" class="icon-btn sm" onclick="openCodePreviewTab()" title="Open in new tab" aria-label="Open in new tab"><svg class="ic"><use href="#i-maximize"/></svg></button>
+                    <button type="button" class="icon-btn sm" onclick="closeCodePreview()" title="Close preview" aria-label="Close preview"><svg class="ic"><use href="#i-x"/></svg></button>
+                  </div>
+                  <iframe id="codePreviewFrame" title="HTML preview" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+                </div>
                 <div class="editor-empty" id="editorEmpty">
                   <svg class="brand-mark big" viewBox="0 0 40 40" aria-hidden="true">
                     <path d="M20 4a16 16 0 1 0 15.6 19.6" fill="none" stroke="var(--lime)" stroke-width="4.5" stroke-linecap="round"/>
