@@ -94,7 +94,7 @@
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
-    if (res.status === 401) { showLogin(data.message); throw new Error(data.message); }
+    if (res.status === 401) { showLogin(data.message, data.retryAfter); throw Object.assign(new Error(data.message), { auth: true }); }
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
     return data;
   }
@@ -149,18 +149,41 @@
   }
 
   // ── login ───────────────────────────────
-  function showLogin(msg = '') {
+  // While the server has locked this IP, the button is disabled and a countdown runs.
+  let lockTimer = null;
+  function showLogin(msg = '', retryAfter = 0) {
+    clearInterval(lockTimer);
+    $('loginBtn').disabled = false;
     $('loginErr').textContent = msg;
+    if (retryAfter > 0) {
+      const end = Date.now() + retryAfter * 1000;
+      const tick = () => {
+        const left = Math.ceil((end - Date.now()) / 1000);
+        if (left <= 0) {
+          clearInterval(lockTimer);
+          $('loginBtn').disabled = false;
+          $('loginErr').textContent = 'You can try again now.';
+          $('tokenInput').focus();
+          return;
+        }
+        $('loginBtn').disabled = true;
+        $('loginErr').textContent = `Too many wrong tokens. Try again in ${left} s`;
+      };
+      tick();
+      lockTimer = setInterval(tick, 250);
+    }
     $('login').classList.add('show');
     setTimeout(() => $('tokenInput').focus(), 50);
   }
   async function login() {
+    if ($('loginBtn').disabled) return;
     localStorage.setItem('opsAgentToken', $('tokenInput').value.trim());
     try {
       await api('/system');
+      clearInterval(lockTimer);
       $('login').classList.remove('show');
       start();
-    } catch (err) { $('loginErr').textContent = err.message; }
+    } catch (err) { if (!err.auth) $('loginErr').textContent = err.message; } // 401: showLogin already shows it
   }
   function logout() {
     localStorage.removeItem('opsAgentToken');

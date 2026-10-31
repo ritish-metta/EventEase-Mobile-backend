@@ -101,17 +101,25 @@ const REPO_RE = /^(https:\/\/[\w.-]+\/[\w./~-]+|git@[\w.-]+:[\w./~-]+)$/;
 // ─────────────────────────────────────────────
 // Auth — constant-time compare + lockout after repeated failures per IP
 // ─────────────────────────────────────────────
-const failures = new Map(); // ip -> { count, first }
-const LOCK_AFTER = 10;
-const LOCK_WINDOW_MS = 15 * 60 * 1000;
+const failures = new Map(); // ip -> { count, first, lockedUntil }
+const LOCK_AFTER = 10; // wrong tokens in a row from one IP…
+const LOCK_MS = 60 * 1000; // …lock that IP for 1 minute
+const FORGET_MS = 15 * 60 * 1000; // wrong tries older than this are forgotten
+
+// Seconds this IP still has to wait (0 = not locked).
+function lockSecondsLeft(ip) {
+  const f = failures.get(ip);
+  return f?.lockedUntil ? Math.max(0, Math.ceil((f.lockedUntil - Date.now()) / 1000)) : 0;
+}
 
 function verifyToken(token, ip) {
   if (!OPS_TOKEN) return 'OPS_TOKEN is not set on the server';
   const now = Date.now();
   const f = failures.get(ip);
-  if (f && now - f.first > LOCK_WINDOW_MS) failures.delete(ip);
-  const current = failures.get(ip);
-  if (current && current.count >= LOCK_AFTER) return 'Too many wrong tokens — locked for 15 minutes';
+  // lock over, or old tries → start counting again
+  if (f && ((f.lockedUntil && now >= f.lockedUntil) || (!f.lockedUntil && now - f.first > FORGET_MS))) failures.delete(ip);
+  const wait = lockSecondsLeft(ip);
+  if (wait) return `Too many wrong tokens. Try again in ${wait} s`;
 
   const given = Buffer.from(String(token || ''));
   const want = Buffer.from(OPS_TOKEN);
@@ -119,8 +127,13 @@ function verifyToken(token, ip) {
     failures.delete(ip);
     return null;
   }
-  failures.set(ip, { count: (current?.count || 0) + 1, first: current?.first || now });
-  return 'Invalid ops token';
+  const current = failures.get(ip);
+  const count = (current?.count || 0) + 1;
+  const locked = count >= LOCK_AFTER;
+  failures.set(ip, { count, first: current?.first || now, lockedUntil: locked ? now + LOCK_MS : null });
+  if (locked) return `Too many wrong tokens. Try again in ${LOCK_MS / 1000} s`;
+  const left = LOCK_AFTER - count;
+  return `Invalid ops token (${left} ${left === 1 ? 'try' : 'tries'} left)`;
 }
 
 // ─────────────────────────────────────────────
@@ -272,7 +285,11 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api', (req, res, next) => {
   const error = verifyToken(req.header('x-ops-token'), req.ip);
-  if (error) return res.status(401).json({ success: false, message: error });
+  if (error) {
+    const retryAfter = lockSecondsLeft(req.ip);
+    if (retryAfter) res.set('Retry-After', String(retryAfter));
+    return res.status(401).json({ success: false, message: error, retryAfter });
+  }
   next();
 });
 

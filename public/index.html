@@ -570,7 +570,7 @@
               <table><thead><tr><th scope="col">IP</th><th scope="col">Wrong tries</th><th scope="col">Since</th><th scope="col"></th></tr></thead>
                 <tbody id="secLockouts"></tbody></table>
             </div>
-            <p class="muted small">An IP is blocked for 15 minutes after 10 wrong passwords.</p>
+            <p class="muted small">An IP is blocked for 1 minute after 10 wrong passwords in a row.</p>
           </div>
         </div>
         <div class="card">
@@ -685,7 +685,7 @@
           <div class="card guide">
             <div class="card-head"><h2>Problems and fixes</h2></div>
             <ul>
-              <li><b>"Too many wrong tokens, locked for 15 minutes"</b>: wait 15 minutes, or run <code>pm2 restart ops-agent</code> on the server. Get the right password with <code>grep OPS_TOKEN ~/opsedge/.env</code>.</li>
+              <li><b>"Too many wrong tokens. Try again in … s"</b>: wait for the countdown (1 minute), or run <code>pm2 restart ops-agent</code> on the server. Get the right password with <code>grep OPS_TOKEN ~/opsedge/.env</code>.</li>
               <li><b>Page does not load / times out</b>: the port is not open for your current IP in the AWS security group.</li>
               <li><b>Page says connection refused</b>: the app is not running. Check <code>pm2 list</code> and the project's Logs.</li>
               <li><b>pm2 error "uv_cwd"</b>: your terminal is in a deleted folder. Run <code>cd ~</code> first.</li>
@@ -743,7 +743,7 @@
       <div class="input-ic"><svg class="ic"><use href="#i-key"/></svg>
         <input id="tokenInput" type="password" autocomplete="current-password" placeholder="Ops token" onkeydown="if(event.key==='Enter')login()"></div>
       <p class="down small" id="loginErr"></p>
-      <button type="button" class="b-primary wide" onclick="login()">Log in</button>
+      <button type="button" class="b-primary wide" id="loginBtn" onclick="login()">Log in</button>
     </div>
   </div>
 </div>
