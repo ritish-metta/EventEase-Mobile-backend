@@ -64,9 +64,10 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     return all;
   }
 
-  // listening TCP sockets: inode -> port, from /proc/net/tcp{,6} (state 0A = LISTEN)
-  function listeningInodes() {
-    const map = new Map();
+  // listening TCP sockets from /proc/net/tcp{,6} (state 0A = LISTEN): inode -> port, plus all ports
+  function listening() {
+    const byInode = new Map();
+    const ports = new Set();
     for (const file of ['/proc/net/tcp', '/proc/net/tcp6']) {
       let text = '';
       try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
@@ -74,20 +75,44 @@ module.exports = function transfer(ctx, { backups, deploys }) {
         const cols = line.trim().split(/\s+/);
         if (cols[3] !== '0A') continue;
         const port = parseInt(cols[1].split(':')[1], 16);
-        if (port && cols[9] && cols[9] !== '0') map.set(cols[9], port);
+        if (!port) continue;
+        ports.add(port);
+        if (cols[9] && cols[9] !== '0') byInode.set(cols[9], port);
       }
     }
-    return map;
+    return { byInode, ports };
   }
 
-  // TCP ports the project's processes (and their children, e.g. under "npm start")
-  // listen on. Reads /proc directly: `ss -p` does not show owners on every server.
-  async function projectPorts(proj) {
+  // PORT from the project's .env
+  function envPort(cwd) {
+    try {
+      const m = fs.readFileSync(path.join(cwd, '.env'), 'utf8').match(/^\s*PORT\s*=\s*["']?(\d{1,5})/m);
+      return m ? Number(m[1]) : null;
+    } catch { return null; }
+  }
+
+  // ports the app says it uses in its output ("running on port 2979", "localhost:3000"), newest first
+  function logPorts(lines) {
+    const found = [];
+    for (const line of [...lines].reverse()) {
+      for (const m of line.matchAll(/\bport\D{0,3}(\d{2,5})\b|(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::\]):(\d{2,5})\b/gi)) {
+        const n = Number(m[1] || m[2]);
+        if (n > 0 && n < 65536 && !found.includes(n)) found.push(n);
+      }
+    }
+    return found;
+  }
+
+  // The TCP port the project listens on, and how we know:
+  //  1. "process": a listening socket owned by the app or its children (read from /proc;
+  //     not possible when the node binary has capabilities, its /proc entry is then root-only)
+  //  2. ".env" / "deploy settings" / "app output": the port it should use, if that port is listening
+  async function projectPorts(proj, outLines = null) {
     const pids = proj.instances.map((i) => i.pid).filter(Boolean);
-    if (!pids.length) return [];
+    if (!pids.length) return { ports: [], how: null };
     const tree = await descendants(pids);
-    const listening = listeningInodes();
-    const ports = new Set();
+    const { byInode, ports: open } = listening();
+    const owned = new Set();
     for (const pid of tree) {
       let fds = [];
       try { fds = fs.readdirSync(`/proc/${pid}/fd`); } catch { continue; }
@@ -95,18 +120,21 @@ module.exports = function transfer(ctx, { backups, deploys }) {
         let link = '';
         try { link = fs.readlinkSync(`/proc/${pid}/fd/${fd}`); } catch { continue; }
         const m = link.match(/^socket:\[(\d+)\]$/);
-        if (m && listening.has(m[1])) ports.add(listening.get(m[1]));
+        if (m && byInode.has(m[1])) owned.add(byInode.get(m[1]));
       }
     }
-    return [...ports].filter((p) => p !== ctx.PANEL_PORT).sort((a, b) => a - b);
-  }
-
-  // PORT from the project's .env (used when the app isn't running)
-  function envPort(cwd) {
-    try {
-      const m = fs.readFileSync(path.join(cwd, '.env'), 'utf8').match(/^\s*PORT\s*=\s*["']?(\d{1,5})/m);
-      return m ? Number(m[1]) : null;
-    } catch { return null; }
+    owned.delete(ctx.PANEL_PORT);
+    if (owned.size) return { ports: [...owned].sort((a, b) => a - b), how: 'process' };
+    const lines = outLines || ctx.tailFile(proj.logs.out[0], 60);
+    const candidates = [
+      [envPort(proj.cwd), '.env'],
+      [Number(deploys.get(proj.name)?.port) || null, 'deploy settings'],
+      ...logPorts(lines).map((n) => [n, 'app output']),
+    ];
+    for (const [port, how] of candidates) {
+      if (port && port !== ctx.PANEL_PORT && open.has(port)) return { ports: [port], how };
+    }
+    return { ports: [], how: null, expected: candidates.find(([n]) => n)?.[0] || null };
   }
 
   const httpCheck = (port) => new Promise((resolve) => {
@@ -138,14 +166,19 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     if (!proj) return { found: false, ok: false, summary: `${name} is not running under PM2` };
     const statuses = [...new Set(proj.instances.map((i) => i.status))];
     const online = proj.online === proj.instances.length;
-    const ports = online ? await projectPorts(proj) : [];
-    const port = ports[0] || null;
-    const httpResult = port ? await httpCheck(port) : null;
     const errLines = logSince(proj.logs.err[0], errOffset, 40);
     const outLines = logSince(proj.logs.out[0], outOffset, 40);
+    const found = online ? await projectPorts(proj, outLines.length ? outLines : null) : { ports: [] };
+    const { ports } = found;
+    const port = ports[0] || null;
+    const httpResult = port ? await httpCheck(port) : null;
     const problems = [];
     if (!online) problems.push(`Status is ${statuses.join(', ')}`);
-    if (online && !port) problems.push('Running, but not listening on any port (yet)');
+    if (online && !port) {
+      problems.push(found.expected
+        ? `Running, but nothing answers on port ${found.expected} (yet)`
+        : "Running, but no open port found. Set PORT in the project's .env so it can be checked");
+    }
     if (httpResult?.error) problems.push(`Port ${port} does not answer: ${httpResult.error}`);
     else if (httpResult?.status >= 500) problems.push(`Port ${port} answers with an error: HTTP ${httpResult.status}`);
     return {
@@ -156,7 +189,8 @@ module.exports = function transfer(ctx, { backups, deploys }) {
       restarts: proj.restarts,
       startedAt: Math.max(0, ...proj.instances.map((i) => i.startedAt || 0)),
       ports,
-      port: port || envPort(proj.cwd),
+      portFrom: found.how || null,
+      port: port || found.expected || envPort(proj.cwd),
       http: httpResult,
       problems,
       logs: { out: outLines, err: errLines },
@@ -174,7 +208,7 @@ module.exports = function transfer(ctx, { backups, deploys }) {
       status: [...new Set(p.instances.map((i) => i.status))].join(', '),
       restarts: p.restarts,
       startedAt: Math.max(0, ...p.instances.map((i) => i.startedAt || 0)),
-      port: (await projectPorts(p))[0] || envPort(p.cwd),
+      port: (await projectPorts(p)).ports[0] || envPort(p.cwd) || Number(deploys.get(p.name)?.port) || null,
       deploy: deploys.get(p.name) || null,
       last: (history[p.name] || [])[0] || null,
       busy: Boolean(ctx.busyJob(p.name)),
