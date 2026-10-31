@@ -663,3 +663,34 @@ table.files td { padding: 9px 12px; }
 .reco-hint .ic.flip { transform: rotate(180deg); }
 @keyframes hint-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
 @media (prefers-reduced-motion: reduce) { .reco-grid.slide-next, .reco-grid.slide-prev, .reco-hint { animation: none; } }
+
+/* project busy state: progress box on the card, locked buttons */
+.proj.is-busy { border-color: color-mix(in srgb, var(--amber) 45%, transparent); box-shadow: 0 0 0 3px var(--amber-soft); }
+.proj.is-busy .actions button:disabled { opacity: .35; cursor: not-allowed; filter: grayscale(.6); }
+.busy-pill { gap: 7px; }
+.busy-pill::before { display: none; }
+.busy-pill .spin { width: 10px; height: 10px; }
+.spin { width: 13px; height: 13px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.busy-box { display: grid; gap: 8px; padding: 14px 16px; border-radius: 18px; background: var(--amber-soft); }
+.busy-top { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--amber); }
+.busy-top b { color: var(--text); font-weight: 600; }
+.busy-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.busy-top a { margin-left: auto; font-size: 12.5px; color: var(--text); font-weight: 500; }
+.busy-bar { position: relative; height: 8px; border-radius: 999px; background: var(--card); overflow: hidden; }
+.busy-bar > div { height: 100%; border-radius: 999px; transition: width .6s ease;
+  background: repeating-linear-gradient(-45deg, #f5b94a 0 10px, #f8cd78 10px 20px); background-size: 28px 28px; animation: stripes 1s linear infinite; }
+.busy-bar.indeterminate > div { position: absolute; width: 40% !important; animation: stripes 1s linear infinite, slide 1.4s ease-in-out infinite; }
+@keyframes stripes { to { background-position: 28px 0; } }
+@keyframes slide { 0% { left: -40%; } 100% { left: 100%; } }
+.busy-steps { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.busy-steps span { display: inline-flex; align-items: center; gap: 6px; }
+.busy-steps .ic { width: 14px; height: 14px; color: var(--ok); }
+.busy-steps i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; }
+.busy-steps .done { color: var(--text); }
+.busy-steps .now { color: var(--amber); font-weight: 600; }
+.busy-steps .now i { background: currentColor; animation: pulse-dot 1s ease-in-out infinite; }
+@keyframes pulse-dot { 50% { opacity: .35; } }
+.busy-line { font: 11.5px 'JetBrains Mono', monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.busy-note { font-size: 11.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .busy-bar > div, .spin, .busy-steps .now i { animation: none; } }

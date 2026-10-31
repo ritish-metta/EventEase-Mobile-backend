@@ -270,6 +270,11 @@
       $('projectList').innerHTML = `<p class="down">${esc(err.message)}</p>`;
       return;
     }
+    renderProjects();
+  }
+
+  // Draws the cards from the last loaded list (also re-run when a job starts/ends, without a fetch).
+  function renderProjects() {
     const online = projects.filter((p) => p.online > 0).length;
     $('projVal').textContent = `${online} / ${projects.length}`;
     $('projSub').textContent = projects.filter((p) => !p.online).map((p) => p.name + ' is down').join(', ') || 'all running';
@@ -278,13 +283,16 @@
       const total = p.instances.length;
       const startedAt = Math.min(...p.instances.filter((i) => i.status === 'online').map((i) => i.startedAt));
       const n = js(p.name);
-      return `<div class="proj">
+      const busy = projectBusy(p.name);
+      const lock = busy ? ' disabled title="Busy: wait until the current action finishes"' : '';
+      return `<div class="proj${busy ? ' is-busy' : ''}">
         <div class="head">
           ${avatar(p.name)}
           <div class="who"><div><b>${esc(p.name)}</b><span>${esc(p.cwd)}</span></div></div>
           <span class="spacer"></span>
-          ${statusPill(p)}
+          ${busy ? busyPill(busy) : statusPill(p)}
         </div>
+        ${busy ? busyBox(p.name, busy) : ''}
         <div class="row">
           <span class="pill p-grey">${p.mode}${p.mode === 'cluster' ? ' × ' + total : ''}</span>
           ${p.isAgent ? '<span class="pill p-grey">this panel</span>' : ''}
@@ -301,12 +309,12 @@
         </div>
         <div class="actions">
           ${p.online
-            ? `<button type="button" class="b-primary" onclick="projAct(${n},'reload')">${ic('refresh')}Reload</button>
-               <button type="button" class="b-orange" onclick="projAct(${n},'restart')">${ic('rotate')}Restart</button>
-               ${p.isAgent ? '' : `<button type="button" class="b-red" onclick="projAct(${n},'stop')">${ic('stop')}Stop</button>`}`
-            : `<button type="button" class="b-lime" onclick="projAct(${n},'start')">${ic('play')}Start</button>`}
-          <button type="button" class="b-lime" onclick="projAct(${n},'deploy')">${ic('rocket')}Deploy</button>
-          ${p.mode === 'cluster' ? `<button type="button" class="b-grey" onclick="scaleProj(${n}, ${total})">${ic('layers')}Scale</button>` : ''}
+            ? `<button type="button" class="b-primary" onclick="projAct(${n},'reload')"${lock}>${ic('refresh')}Reload</button>
+               <button type="button" class="b-orange" onclick="projAct(${n},'restart')"${lock}>${ic('rotate')}Restart</button>
+               ${p.isAgent ? '' : `<button type="button" class="b-red" onclick="projAct(${n},'stop')"${lock}>${ic('stop')}Stop</button>`}`
+            : `<button type="button" class="b-lime" onclick="projAct(${n},'start')"${lock}>${ic('play')}Start</button>`}
+          <button type="button" class="b-lime" onclick="projAct(${n},'deploy')"${lock}>${ic('rocket')}Deploy</button>
+          ${p.mode === 'cluster' ? `<button type="button" class="b-grey" onclick="scaleProj(${n}, ${total})"${lock}>${ic('layers')}Scale</button>` : ''}
           <button type="button" class="b-grey" onclick="openInCode(${n})">${ic('code')}Code</button>
           <button type="button" class="b-grey" onclick="openLogs(${n})">${ic('logs')}Logs</button>
           <button type="button" class="b-grey" onclick="openGit(${n})">${ic('git')}Git</button>
@@ -314,14 +322,81 @@
           <button type="button" class="b-grey" onclick="openBackups(${n})">${ic('save')}Backups</button>
           <button type="button" class="b-grey" onclick="browse(${js(p.cwd)}); showTab('files')">${ic('folder')}Files</button>
           <button type="button" class="b-ghost" onclick="projAct(${n},'flush')">${ic('broom')}Clear logs</button>
-          ${p.isAgent ? '' : `<button type="button" class="b-ghost" onclick="projAct(${n},'delete')" title="Stop it and remove it from PM2, keep the files">${ic('x')}Remove from PM2</button>
-          <button type="button" class="b-red" onclick="destroyProject(${n})" title="Stop it, remove it from PM2 and delete its folder">${ic('trash')}Delete completely</button>`}
+          ${p.isAgent ? '' : `<button type="button" class="b-ghost" onclick="projAct(${n},'delete')" title="Stop it and remove it from PM2, keep the files"${lock}>${ic('x')}Remove from PM2</button>
+          <button type="button" class="b-red" onclick="destroyProject(${n})" title="Stop it, remove it from PM2 and delete its folder"${lock}>${ic('trash')}Delete completely</button>`}
         </div>
       </div>`;
     }).join('') || '<p class="muted">No PM2 projects yet. Click "Add project".</p>';
 
     renderHealth();
   }
+
+  // ── "busy" state: a deploy / restart / restore is running on a project ──
+  // While busy, the project's card shows progress and its action buttons are locked.
+  const ciDeploying = new Map(); // project -> start time, while GitHub deploys an editor push
+  const BUSY_WORDS = {
+    deploy: 'Deploying', restart: 'Restarting', reload: 'Reloading', start: 'Starting', stop: 'Stopping',
+    scale: 'Scaling', delete: 'Removing from PM2', destroy: 'Deleting', commit: 'Pushing to GitHub',
+    discard: 'Discarding changes', backup: 'Backing up', restore: 'Restoring',
+  };
+  // Steps shown for the longer jobs; a step is done once its marker shows up in the job's output.
+  const BUSY_STEPS = {
+    deploy: [['Pull code', /HEAD is now at|Fast-forward|Already up to date/], ['Install packages', /added \d+ package|up to date|audited \d+ package|removed \d+ package/], ['Reload app', /deployed:|\[PM2\].*✓/]],
+    restore: [['Extract files', /npm (warn|notice)|added \d+|up to date|audited/], ['Install packages', /added \d+ package|up to date|audited \d+ package/], ['Start app', /restored|\[PM2\].*✓/]],
+  };
+
+  function projectBusy(name) {
+    const job = [...jobs.values()].filter((j) => j.project === name && j.status === 'running').sort((a, b) => b.startedAt - a.startedAt)[0];
+    if (job) {
+      const word = /^rollback/.test(job.title) ? 'Rolling back' : BUSY_WORDS[job.kind] || 'Working';
+      return { job, word, since: job.startedAt, steps: BUSY_STEPS[job.kind] || null };
+    }
+    if (ciDeploying.has(name)) return { word: 'GitHub is deploying', since: ciDeploying.get(name), steps: null, ci: true };
+    return null;
+  }
+
+  function refuseIfBusy(name) {
+    const b = projectBusy(name);
+    if (b) toast(`${name}: ${b.word.toLowerCase()} is still running. Wait until it finishes.`, 'err');
+    return Boolean(b);
+  }
+
+  const busyPill = (b) => `<span class="pill p-orange busy-pill"><span class="spin"></span>${esc(b.word)}…</span>`;
+  const busySlug = (name) => 'busy-' + name.replace(/[^\w-]/g, '_');
+  const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+  function busyDetails(b) {
+    const out = b.job?.output || '';
+    const done = b.steps ? b.steps.filter(([, re]) => re.test(out)).length : 0;
+    const lastLine = out.split('\n').map((l) => l.trim()).filter(Boolean).at(-1) || (b.ci ? 'Waiting for the pipeline to restart the app…' : 'Starting…');
+    return { done, lastLine };
+  }
+
+  function busyBox(name, b) {
+    const { done, lastLine } = busyDetails(b);
+    const pct = b.steps ? Math.min(95, ((done + 0.5) / b.steps.length) * 100) : null;
+    return `<div class="busy-box" id="${busySlug(name)}">
+      <div class="busy-top"><span class="spin"></span><b>${esc(b.word)}…</b><span class="busy-time">${mmss(Date.now() - b.since)}</span>
+        ${b.job ? `<a href="#" onclick="event.preventDefault(); openJobs.add(${js(b.job.id)}); showTab('activity')">Live output</a>` : ''}</div>
+      <div class="busy-bar ${pct === null ? 'indeterminate' : ''}"><div style="width:${pct ?? 40}%"></div></div>
+      ${b.steps ? `<div class="busy-steps">${b.steps.map(([label], i) =>
+        `<span class="${i < done ? 'done' : i === done ? 'now' : ''}">${i < done ? ic('check') : '<i></i>'}${esc(label)}</span>`).join('')}</div>` : ''}
+      <div class="busy-line">${esc(lastLine.slice(0, 140))}</div>
+      <div class="busy-note">Buttons are locked until this finishes, so nothing runs twice.</div></div>`;
+  }
+
+  // Cheap in-place refresh (timer, steps, last output line) without redrawing the cards.
+  function updateBusyBoxes() {
+    for (const p of projects) {
+      const el = document.getElementById(busySlug(p.name));
+      const b = projectBusy(p.name);
+      if (!el || !b) continue;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = busyBox(p.name, b);
+      el.replaceWith(tmp.firstElementChild);
+    }
+  }
+  setInterval(updateBusyBoxes, 1000);
 
   // Avatar circle with initials and a stable colour per name (the people avatars of the design).
   const AVATAR_COLORS = ['#b5f23d', '#5cd3ff', '#a78bfa', '#fbbf24', '#ff8fab', '#5eead4'];
@@ -351,7 +426,7 @@
     const totalMem = projects.reduce((s, p) => s + p.memory, 0) || 1;
     $('healthTable').innerHTML = projects.map((p) => `<tr>
       <td><div class="who">${avatar(p.name)}<div><b>${esc(p.name)}</b><span>${p.instances.length} instance(s) · ${fmtBytes(p.memory)}</span></div></div></td>
-      <td>${statusPill(p)}</td>
+      <td>${projectBusy(p.name) ? busyPill(projectBusy(p.name)) : statusPill(p)}</td>
       <td><b>${p.restarts}</b> <span class="muted">restarts</span></td>
       <td style="min-width:170px">${meter(Math.min(100, p.cpu), p.cpu + '%')}</td>
       <td style="min-width:200px">${meter((p.memory / totalMem) * 100, null, false)}</td></tr>`).join('')
@@ -360,6 +435,7 @@
 
   // Remove a project for good: PM2 entry + its folder. Needs the name typed back.
   async function destroyProject(name) {
+    if (refuseIfBusy(name)) return;
     const proj = projects.find((p) => p.name === name);
     const typed = prompt(`DELETE "${name}" COMPLETELY?\n\n• stops the app and removes it from PM2\n• deletes the folder ${proj?.cwd}\n  (code, .env, uploads… everything in it)\n\nThis cannot be undone. Type the project name to confirm:`);
     if (typed === null) return;
@@ -369,6 +445,7 @@
   }
 
   function projAct(name, action) {
+    if (action !== 'flush' && refuseIfBusy(name)) return;
     const texts = {
       stop: `STOP ${name}? It stays down until you press Start.`,
       restart: `Restart ${name}? (short downtime)`,
@@ -382,6 +459,7 @@
   }
 
   function scaleProj(name, current) {
+    if (refuseIfBusy(name)) return;
     const n = prompt(`How many instances for ${name}? (1–8, now ${current})`, current);
     if (!n) return;
     act(`/projects/${encodeURIComponent(name)}/scale`, { instances: +n }).then((r) => r && setTimeout(loadProjects, 3000));
@@ -861,6 +939,7 @@
       const prev = jobs.get(j.id);
       jobs.set(j.id, { ...prev, ...j, output: j.output ?? prev?.output ?? '' });
       if (!prev) openJobs.add(j.id);
+      if (j.project && (!prev || prev.status !== j.status)) renderProjects(); // lock / unlock that project now
       if (prev && prev.status === 'running' && j.status !== 'running') {
         toast(`${j.title}: ${j.status}`, j.status === 'failed' ? 'err' : 'ok');
         loadProjects();
@@ -871,6 +950,7 @@
       const j = jobs.get(id);
       if (!j) return;
       j.output = (j.output || '') + text;
+      if (j.project) updateBusyBoxes();
       const pre = document.querySelector(`#job-${id} pre`);
       if (pre) { pre.textContent = j.output; pre.scrollTop = pre.scrollHeight; }
     });

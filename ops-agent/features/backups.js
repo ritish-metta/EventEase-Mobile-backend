@@ -55,8 +55,9 @@ module.exports = function backups(ctx) {
 
   ctx.app.post('/api/backups', async (req, res) => {
     const proj = await ctx.findProject(String(req.body?.project || ''));
+    ctx.assertNotBusy(proj.name);
     const { file, command } = backupCommand(proj);
-    const job = ctx.startJob(`backup ${proj.name}`, command);
+    const job = ctx.startJob(`backup ${proj.name}`, command, { project: proj.name, kind: 'backup' });
     res.json({ success: true, message: `Backing up ${proj.name}…`, file, jobId: job.id });
   });
 
@@ -64,6 +65,7 @@ module.exports = function backups(ctx) {
     const full = checkFile(req.params.file);
     const meta = index[req.params.file];
     if (!meta?.cwd) throw new ctx.HttpError(400, 'This backup has no project information, extract it from the Files page instead');
+    ctx.assertNotBusy(meta.project);
     const parent = path.dirname(meta.cwd);
     const running = (await ctx.getProjects()).some((p) => p.name === meta.project);
     const start = running
@@ -78,7 +80,7 @@ module.exports = function backups(ctx) {
       start,
       'pm2 save',
       `echo "✅ ${meta.project} restored"`,
-    ].join('\n'), { detached: meta.project === ctx.AGENT_NAME });
+    ].join('\n'), { detached: meta.project === ctx.AGENT_NAME, project: meta.project, kind: 'restore' });
     res.json({ success: true, message: `Restoring ${meta.project}…`, jobId: job.id });
   });
 

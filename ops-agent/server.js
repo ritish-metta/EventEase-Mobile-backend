@@ -132,10 +132,13 @@ let opsNs; // socket.io namespace, set below
 
 const jobSummary = ({ output, ...rest }) => rest;
 
-function startJob(title, command, { cwd = HOME, detached = false } = {}) {
+// project = the PM2 project this job changes (the UI locks that project while it runs)
+function startJob(title, command, { cwd = HOME, detached = false, project = null, kind = null } = {}) {
   const job = {
     id: crypto.randomUUID().slice(0, 8),
     title,
+    project,
+    kind,
     command,
     status: 'running',
     output: '',
@@ -172,6 +175,19 @@ function startJob(title, command, { cwd = HOME, detached = false } = {}) {
     opsNs?.emit('job', jobSummary(job));
   });
   return job;
+}
+
+const startJobBase = (...args) => startJob(...args);
+
+// The running job that is changing a project, if any (one change at a time per project).
+const busyJob = (project) => jobs.find((j) => j.project === project && j.status === 'running');
+
+function assertNotBusy(project) {
+  const busy = busyJob(project);
+  if (busy) {
+    const secs = Math.round((Date.now() - busy.startedAt) / 1000);
+    throw new HttpError(409, `${project} is busy: ${busy.title} (started ${secs}s ago). Wait for it to finish.`);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -269,6 +285,8 @@ const ctx = {
   tailFile,
   HttpError,
   startJob,
+  busyJob,
+  assertNotBusy,
   getProjects,
   findProject,
   failures,
@@ -400,7 +418,9 @@ app.post('/api/projects', async (req, res) => {
 app.post('/api/projects/:name/:action', async (req, res) => {
   const { name, action } = req.params;
   const proj = await findProject(name);
+  if (action !== 'flush') assertNotBusy(name);
   let job;
+  const startJob = (title, command, opts = {}) => startJobBase(title, command, { ...opts, project: name, kind: action });
 
   switch (action) {
     case 'start':

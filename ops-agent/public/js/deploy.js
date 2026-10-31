@@ -16,6 +16,7 @@
   async function openEditorDeploy() {
     const proj = currentCodeProject();
     if (!proj) return toast('Pick a project (not the home folder) to deploy', 'err');
+    if (refuseIfBusy(proj.name)) return;
     await saveAllCode();
     openModal(`Deploy ${proj.name}`, '<p class="muted">Checking changes…</p>');
     let g, access;
@@ -80,6 +81,9 @@
     loadGitStatus();
     if (restartNow) act(`/projects/${encodeURIComponent(name)}/${proj?.mode === 'cluster' ? 'reload' : 'restart'}`);
     setDeployStatus('Pushed ✓ GitHub is deploying…', 'busy');
+    ciDeploying.set(name, Date.now()); // the project card shows this and locks its buttons
+    renderProjects();
+    const ciDone = () => { ciDeploying.delete(name); renderProjects(); };
 
     // "Live" = the app was restarted after our push (the pipeline reloads it with PM2)
     const access = await api(`/projects/${encodeURIComponent(name)}/git-access`).catch(() => ({}));
@@ -91,12 +95,14 @@
         // compare server time with server time (the browser clock may differ)
         if (p && p.online && started > before) {
           clearInterval(deployWatch);
+          ciDone();
           $('ideDeployBtn').disabled = false;
           setDeployStatus(`Live ✓ ${p.git?.commit || ''}`.trim(), 'ok');
           toast(`${name} is live with your changes`, 'ok');
           loadProjects();
         } else if (Date.now() > giveUpAt) {
           clearInterval(deployWatch);
+          ciDone();
           $('ideDeployBtn').disabled = false;
           setDeployStatus('Pushed, but no restart seen yet. Is deploy switched off, or did the pipeline fail?', 'err',
             access.actionsUrl ? ['Open GitHub Actions', `window.open(${js(access.actionsUrl)}, '_blank')`] : null);

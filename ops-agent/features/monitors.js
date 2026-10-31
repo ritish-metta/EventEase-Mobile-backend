@@ -46,7 +46,7 @@ module.exports = function monitors(ctx, { alerts }) {
 
     if (m.autoRestart && m.project && st.fails === m.failThreshold && Date.now() - st.lastHeal > HEAL_COOLDOWN_MS) {
       st.lastHeal = Date.now();
-      ctx.startJob(`auto-heal: restart ${m.project} (monitor "${m.name}" failed ${st.fails}×)`, `pm2 restart ${ctx.q(m.project)}`);
+      if (!ctx.busyJob(m.project)) ctx.startJob(`auto-heal: restart ${m.project} (monitor "${m.name}" failed ${st.fails}×)`, `pm2 restart ${ctx.q(m.project)}`, { project: m.project, kind: 'restart' });
     }
 
     ctx.emit('monitor', { id: m.id, result, fails: st.fails });
