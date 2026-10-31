@@ -15,7 +15,7 @@
     queue: [], // { file, src, rel, size, status, progress, include, hash, error }
     stripTop: true,
     uploading: false,
-    uploaded: [], // root-relative paths uploaded since the last Apply
+    uploaded: [], // files waiting in the project's staging folder (root-relative), from the server
     apply: null, // { id, jobId, plan }
     pollTimer: null,
     xhrs: new Set(),
@@ -25,6 +25,18 @@
   const txRemember = (patch) => localStorage.setItem(TX_SAVE, JSON.stringify({ ...txSaved(), ...patch }));
   const txProj = () => tx.projects.find((p) => p.name === tx.project) || null;
   const relToRoot = (full) => full === tx.root ? '' : full.slice(tx.root.length + 1);
+  // uploads for a project wait here until Apply (the live folder is not touched before that)
+  const stagingFor = (dir) => `${tx.home}/.ops-staging/${tx.project}` + (relToRoot(dir) ? '/' + relToRoot(dir) : '');
+
+  async function txLoadStaging() {
+    if (!tx.project) { tx.uploaded = []; return; }
+    try {
+      const r = await api('/transfer/staging?project=' + encodeURIComponent(tx.project));
+      tx.uploaded = r.files;
+      tx.stagedCount = r.count;
+      tx.stagedSize = r.size;
+    } catch { tx.uploaded = []; tx.stagedCount = 0; }
+  }
   const LOCK_NAMES = new Set(['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml']);
   const NO_BUILD = /^(\.env(\..*)?|readme(\..*)?|license(\..*)?|\.gitignore)$/i;
 
@@ -91,7 +103,7 @@
     const saved = txSaved();
     const pick = tx.project ?? (saved.project && tx.projects.some((p) => p.name === saved.project) ? saved.project : tx.projects[0]?.name ?? null);
     if (pick !== tx.project || !tx.dir) txSwitch(pick, true);
-    else { txRenderSwitcher(); txBrowse(tx.dir); txLoadHistory(); }
+    else { txRenderSwitcher(); txBrowse(tx.dir); txLoadHistory(); txLoadStaging().then(txRenderApply); }
   }
 
   async function txLoadProjects() {
@@ -107,6 +119,7 @@
     $('txProjects').innerHTML = tx.projects.map((p) => `
       <button type="button" class="tx-proj${p.name === tx.project ? ' active' : ''}" onclick="txSwitch(${js(p.name)})" title="${esc(p.cwd)}">
         <span class="tx-dot ${p.online ? 'on' : 'off'}"></span>${esc(p.name)}${p.port ? `<span class="tx-port">:${p.port}</span>` : ''}
+        ${p.staged ? `<span class="tx-waiting" title="${p.staged} uploaded file(s) not applied yet">${p.staged}</span>` : ''}
         ${p.busy ? '<span class="spin"></span>' : ''}</button>`).join('')
       + `<button type="button" class="tx-proj${tx.project === null ? ' active' : ''}" onclick="txSwitch(null)" title="${esc(tx.home)}">${ic('home')}Home folder</button>`;
     const p = txProj();
@@ -138,6 +151,7 @@
     txRenderApply();
     txBrowse(tx.dir);
     txLoadHistory();
+    txLoadStaging().then(txRenderApply);
   }
 
   // ── server side ───────────────────────────
@@ -310,7 +324,7 @@
 
   const TX_BADGE = {
     pending: ['p-grey', 'Waiting'], comparing: ['p-grey', 'Checking…'], new: ['p-blue', 'New'], changed: ['p-orange', 'Changed'],
-    same: ['p-grey', 'Same'], blocked: ['p-red', 'Blocked'], uploading: ['p-blue', 'Uploading'], done: ['p-green', 'Uploaded'], failed: ['p-red', 'Failed'],
+    same: ['p-grey', 'Same'], blocked: ['p-red', 'Blocked'], uploading: ['p-blue', 'Uploading'], done: ['p-green', 'Uploaded'], ready: ['p-green', 'Ready to apply'], failed: ['p-red', 'Failed'],
   };
 
   function txRenderQueue() {
@@ -343,7 +357,7 @@
     $('txClearBtn').disabled = tx.uploading;
     const rows = q.map((x, i) => [x, i]).filter(([x]) => showSame || x.status !== 'same');
     $('txQueue').innerHTML = rows.slice(0, 800).map(([x, i]) => {
-      const [cls, label] = TX_BADGE[x.status] || TX_BADGE.pending;
+      const [cls, label] = TX_BADGE[x.status === 'done' && tx.project ? 'ready' : x.status] || TX_BADGE.pending;
       const can = ['new', 'changed', 'failed'].includes(x.status);
       return `<tr class="${x.include && can ? '' : 'dim'}">
         <td><input type="checkbox" ${x.include && can ? 'checked' : ''} ${can && !tx.uploading ? '' : 'disabled'} onchange="txInclude(${i}, this.checked)" aria-label="Upload this file"></td>
@@ -414,8 +428,7 @@
     tx.uploadTotal = todo.reduce((s, x) => s + x.size, 0) || 1;
     $('txProgress').hidden = false;
     $('txOverall').style.width = '0';
-    const dir = tx.dir;
-    const base = relToRoot(dir);
+    const dir = tx.project ? stagingFor(tx.dir) : tx.dir;
     todo.forEach((x) => { x.status = 'uploading'; x.progress = 0; x.error = ''; });
     txRenderQueue();
     const queue = [...todo];
@@ -427,13 +440,10 @@
     $('txProgress').hidden = true;
     const ok = todo.filter((x) => x.status === 'done');
     const failed = todo.length - ok.length;
-    for (const x of ok) {
-      const p = (base ? base + '/' : '') + x.rel;
-      if (!tx.uploaded.includes(p)) tx.uploaded.push(p);
-    }
-    toast(failed ? `Uploaded ${ok.length}, ${failed} failed (tick them and upload again)` : `Uploaded ${ok.length} file(s)`, failed ? 'err' : 'ok');
+    toast(failed ? `Uploaded ${ok.length}, ${failed} failed (tick them and upload again)`
+      : tx.project ? `Uploaded ${ok.length} file(s). Click Apply to put them live` : `Uploaded ${ok.length} file(s)`, failed ? 'err' : 'ok');
     txRenderQueue();
-    txBrowse(tx.dir);
+    if (tx.project) { await txLoadStaging(); txLoadProjects(); } else txBrowse(tx.dir);
     txRenderApply();
     if (ok.length && tx.project && !failed) $('txApplyCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -471,8 +481,9 @@
     const mode = $('txMode')?.value || 'auto';
     const n = tx.uploaded.length;
     $('txApplyBody').innerHTML = `
-      <p>${n ? `<b>${n}</b> file(s) uploaded to <b>${esc(p.name)}</b>. Apply them to make the app use the new files.`
-        : `Nothing uploaded since the last apply. You can still restart or fully redeploy <b>${esc(p.name)}</b>.`}</p>
+      ${n ? `<div class="notice info">${ic('upload')}<span><b>${tx.stagedCount || n} file(s)</b> (${fmtBytes(tx.stagedSize || 0)}) uploaded and waiting.
+          Your live app is <b>not changed</b> until you click Apply.</span></div>`
+        : `<p>Nothing uploaded and waiting. You can still restart or fully redeploy <b>${esc(p.name)}</b>.</p>`}
       ${n ? `<details class="muted small"><summary>Uploaded files</summary><div class="tx-files">${tx.uploaded.slice(0, 100).map((f) => `<code>${esc(f)}</code>`).join(' ')}${n > 100 ? ` …and ${n - 100} more` : ''}</div></details>` : ''}
       <div class="row mt">
         <label class="muted small" for="txMode">What to do</label>
@@ -484,7 +495,22 @@
       </div>
       <ol class="tx-plan">${txPlanPreview(mode).map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
       <p class="muted small">A backup is made first, so you can roll back in one click if something breaks. Only the last 3 automatic backups are kept.</p>`;
-    $('txApplyFoot').innerHTML = `<button type="button" class="b-gradient" onclick="txApply()" ${p.busy ? 'disabled title="This project is busy"' : ''}>${ic('rocket')}<span>Apply &amp; deploy</span></button>`;
+    $('txApplyFoot').innerHTML = `<button type="button" class="b-gradient" onclick="txApply()" ${p.busy ? 'disabled title="This project is busy"' : ''}>${ic('rocket')}<span>${n ? 'Apply &amp; deploy' : mode === 'full' ? 'Redeploy' : 'Restart'}</span></button>`
+      + (n ? `<button type="button" class="b-grey" onclick="txDiscard()">${ic('trash')}Discard uploaded files</button>` : '');
+  }
+
+  async function txDiscard() {
+    const p = txProj();
+    if (!p || !await askConfirm(`Throw away the ${tx.stagedCount} uploaded file(s) waiting for ${p.name}?\nThe live project is not touched.`,
+      { ok: 'Discard', danger: true, title: 'Discard upload' })) return;
+    try {
+      toast((await api('/transfer/discard', { method: 'POST', body: { project: p.name } })).message, 'ok');
+      tx.queue = [];
+      await txLoadStaging();
+      txRenderQueue();
+      txRenderApply();
+      txLoadProjects();
+    } catch (err) { toast(err.message, 'err'); }
   }
 
   async function txApply() {
@@ -493,9 +519,11 @@
     if (tx.uploading) return toast('Wait for the upload to finish', 'err');
     const mode = $('txMode').value;
     try {
-      const r = await api('/transfer/apply', { method: 'POST', body: { project: p.name, changed: tx.uploaded, mode } });
+      const r = await api('/transfer/apply', { method: 'POST', body: { project: p.name, mode } });
       tx.apply = { id: r.id, jobId: r.jobId, plan: r.plan, why: r.why, startedAt: Date.now() };
       tx.uploaded = [];
+      tx.queue = []; // they are being applied now
+      txRenderQueue();
       txRenderRun(null);
       clearInterval(tx.pollTimer);
       tx.pollTimer = setInterval(txPoll, 1500);
@@ -511,6 +539,8 @@
         clearInterval(tx.pollTimer);
         txLoadProjects();
         txLoadHistory();
+        txLoadStaging();
+        txBrowse(tx.dir);
         toast(record.status === 'live' ? `${record.project} is live ✓` : `${record.project}: ${record.summary}`, record.status === 'live' ? 'ok' : 'err');
       }
     } catch { /* the panel may be busy for a moment, keep polling */ }
@@ -571,7 +601,7 @@
   function txDone() {
     tx.apply = null;
     clearInterval(tx.pollTimer);
-    txRenderApply();
+    txLoadStaging().then(txRenderApply);
   }
 
   async function txRollback(id) {

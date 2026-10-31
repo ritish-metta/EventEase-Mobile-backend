@@ -780,3 +780,5 @@ table.files td { padding: 9px 12px; }
 .tx-sum { max-width: 360px; font-size: 13px; }
 .tx-ok { border-color: var(--ok); }
 @media (max-width: 1100px) { .tx-panes { grid-template-columns: 1fr; } .tx-facts { grid-template-columns: 1fr 1fr; } }
+
+.tx-waiting { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--amber); color: #111; font-size: 11px; font-weight: 600; }

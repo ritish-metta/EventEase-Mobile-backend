@@ -4,6 +4,8 @@
 //
 //   GET  /api/transfer/projects          projects with status, port, deploy settings
 //   POST /api/transfer/compare           which local files are new / changed / same
+//   GET  /api/transfer/staging           files uploaded for a project but not applied yet
+//   POST /api/transfer/discard           drop those files (the project is not touched)
 //   POST /api/transfer/apply             start the apply job, returns a history id
 //   GET  /api/transfer/history           recent applies of a project (with results)
 //   GET  /api/transfer/history/:id       one apply (polled while it runs)
@@ -29,12 +31,6 @@ module.exports = function transfer(ctx, { backups, deploys }) {
   const saveHistory = () => store.save('transfers', history);
 
   // ── helpers ───────────────────────────────
-  const projectDir = (dir) => {
-    const target = ctx.homePath(dir, 'folder');
-    if (target === ctx.HOME || ctx.isProtected(target)) throw new HttpError(400, 'Pick a project folder');
-    return target;
-  };
-
   // "a/b/c.js" inside root, never escaping it
   const safeJoin = (root, rel) => {
     const parts = String(rel || '').replace(/\\/g, '/').split('/').filter(Boolean);
@@ -212,6 +208,7 @@ module.exports = function transfer(ctx, { backups, deploys }) {
       deploy: deploys.get(p.name) || null,
       last: (history[p.name] || [])[0] || null,
       busy: Boolean(ctx.busyJob(p.name)),
+      staged: (() => { try { return listFiles(stagingDir(p.name)).length; } catch { return 0; } })(),
     })));
     res.json({ success: true, home: ctx.HOME, projects: out });
   });
@@ -219,7 +216,7 @@ module.exports = function transfer(ctx, { backups, deploys }) {
   // ── compare local files with the server ───
   // body: { root, files: [{ path, size }] } → per file: new | changed | check (same size: compare hash)
   app.post('/api/transfer/compare', async (req, res) => {
-    const root = projectDir(req.body?.root);
+    const root = ctx.homePath(req.body?.root, 'folder'); // a project folder, or the home folder
     const files = Array.isArray(req.body?.files) ? req.body.files : [];
     if (files.length > MAX_FILES) throw new HttpError(400, `Too many files at once (max ${MAX_FILES})`);
     const results = [];
@@ -237,13 +234,54 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     res.json({ success: true, root, results });
   });
 
-  // ── apply: backup → install/build when needed → restart → health ──
-  // body: { project, changed: [relative paths], mode: auto | restart | full }
+  // ── staging: uploads wait in ~/.ops-staging/<project>/ until Apply ──
+  // So the live app never runs half-uploaded files, and the backup taken by Apply
+  // is of the working version (the upload hasn't touched the project yet).
+  const STAGING_ROOT = path.join(ctx.HOME, '.ops-staging');
+  const stagingDir = (name) => {
+    if (!ctx.NAME_RE.test(name || '')) throw new HttpError(400, 'Invalid project name');
+    return path.join(STAGING_ROOT, name);
+  };
+  function listFiles(dir, rel = '', out = []) {
+    let entries = [];
+    try { entries = fs.readdirSync(path.join(dir, rel), { withFileTypes: true }); } catch { return out; }
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) listFiles(dir, r, out);
+      else if (e.isFile()) out.push(r);
+      if (out.length > MAX_FILES) break;
+    }
+    return out;
+  }
+  const stagedInfo = (name) => {
+    const dir = stagingDir(name);
+    const files = listFiles(dir);
+    const size = files.reduce((n, f) => n + fileSize(path.join(dir, f)), 0);
+    let at = null;
+    try { at = fs.statSync(dir).mtimeMs; } catch { /* nothing staged */ }
+    return { dir, files, size, at };
+  };
+
+  app.get('/api/transfer/staging', (req, res) => {
+    const info = stagedInfo(String(req.query.project || ''));
+    res.json({ success: true, ...info, files: info.files.slice(0, 500), count: info.files.length });
+  });
+
+  app.post('/api/transfer/discard', (req, res) => {
+    const dir = stagingDir(String(req.body?.project || ''));
+    ctx.assertNotBusy(String(req.body?.project));
+    fs.rmSync(dir, { recursive: true, force: true });
+    res.json({ success: true, message: 'Uploaded files discarded. The project was not changed' });
+  });
+
+  // ── apply: backup → copy staged files in → install/build when needed → restart → health ──
+  // body: { project, mode: auto | restart | full }
   app.post('/api/transfer/apply', async (req, res) => {
     const proj = await ctx.findProject(String(req.body?.project || ''));
     if (proj.isAgent) throw new HttpError(400, 'The panel itself is updated by its own deploy, not here');
     ctx.assertNotBusy(proj.name);
-    const changed = (Array.isArray(req.body?.changed) ? req.body.changed : []).map(String).slice(0, MAX_FILES);
+    const staged = stagedInfo(proj.name);
+    const changed = staged.files;
     const mode = ['restart', 'full'].includes(req.body?.mode) ? req.body.mode : 'auto';
     const settings = deploys.get(proj.name) || {};
 
@@ -263,6 +301,11 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     const step = (id, label, cmd) => [`echo "▶ STEP ${id} ${label}"`, `{\n${cmd}\n} || { echo "✖ STEP ${id} failed"; exit 1; }`, `echo "✔ STEP ${id}"`].join('\n');
     const plan = [{ id: 'backup', label: 'Backup current files' }];
     const lines = ['set -e', step('backup', 'Backup current files', backup.command), `cd ${q(proj.cwd)}`];
+    if (changed.length) {
+      plan.push({ id: 'copy', label: `Put ${changed.length} uploaded file(s) in place` });
+      lines.push(step('copy', 'Put uploaded files in place',
+        `cp -a ${q(staged.dir)}/. ${q(proj.cwd)}/ && rm -rf ${q(staged.dir)} && echo "📄 ${changed.length} file(s) updated"`));
+    }
     if (install) {
       plan.push({ id: 'install', label: 'Install packages' });
       lines.push(step('install', 'Install packages', settings.installCmd || ctx.installCmd));
@@ -295,7 +338,7 @@ module.exports = function transfer(ctx, { backups, deploys }) {
     record.jobId = job.id;
     remember(record);
     finalize(record, job);
-    res.json({ success: true, message: `Applying to ${proj.name}…`, id: record.id, jobId: job.id, plan, why });
+    res.json({ success: true, message: `Applying to ${proj.name}…`, id: record.id, jobId: job.id, plan, why, count: changed.length });
   });
 
   function remember(record) {
@@ -318,7 +361,10 @@ module.exports = function transfer(ctx, { backups, deploys }) {
         record.failedStep = failedStep || null;
         record.status = 'failed';
         record.result = await health(record.project, record).catch(() => null);
-        record.summary = `Stopped at "${record.plan.find((s) => s.id === failedStep)?.label || 'a step'}". The app was not restarted with the new files.`;
+        const copied = /^✔ STEP copy/m.test(record.output);
+        record.summary = `Stopped at "${record.plan.find((s) => s.id === failedStep)?.label || 'a step'}". `
+          + (copied ? 'The new files are in place but the app was not restarted. Fix it and apply again, or roll back.'
+            : 'Nothing was changed: your uploaded files are still waiting, you can apply again.');
         record.endedAt = Date.now();
         remember(record);
         ctx.emit('transfer', { id: record.id, project: record.project, status: record.status });
