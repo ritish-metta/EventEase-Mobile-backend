@@ -598,11 +598,15 @@
           <span class="muted small">Sets <code>PORT</code>. Two apps can't use the same port. Open it in AWS (security group) to reach the app.</span></span>
       </div>
 
-      <div class="dp-step"><b>3</b><span>Environment variables <span class="muted">(optional)</span></span></div>
+      <div class="dp-step"><b>3</b><span>Environment variables <span class="muted">(optional)</span></span>
+        <span class="spacer"></span>
+        <button type="button" class="b-grey sm" onclick="$('apEnvFile').click()">${ic('upload')}Upload .env file</button>
+        <input type="file" id="apEnvFile" hidden onchange="loadEnvFile(this.files[0]); this.value=''">
+      </div>
       <textarea id="apEnv" rows="5" spellcheck="false" placeholder="Paste your .env here, one per line:
 MONGODB_URI=mongodb+srv://user:pass@cluster/db
 API_KEY=..."></textarea>
-      <p class="muted small">Saved to the project's <code>.env</code>. Keys already in an existing .env are kept unless you set them here.</p>
+      <p class="muted small">Paste, <b>upload your .env file</b>, or drag it onto the box. Saved to the project's <code>.env</code>. Keys already in an existing .env are kept unless you set them here.</p>
 
       <details class="mt"><summary class="muted">Advanced</summary>
         <div class="form mt">
@@ -613,7 +617,29 @@ API_KEY=..."></textarea>
       </details>`,
       `<button type="button" class="b-gradient" id="apGo" onclick="addProject()">${ic('rocket')}<span>Deploy</span></button>`);
     $('apName').addEventListener('input', () => { $('apName').dataset.touched = '1'; });
+    // drop a .env file onto the box
+    const envBox = $('apEnv');
+    envBox.addEventListener('dragover', (e) => { e.preventDefault(); envBox.classList.add('drop'); });
+    envBox.addEventListener('dragleave', () => envBox.classList.remove('drop'));
+    envBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      envBox.classList.remove('drop');
+      if (e.dataTransfer.files[0]) loadEnvFile(e.dataTransfer.files[0]);
+    });
     setApSource(apSource);
+  }
+
+  // Read a local .env file into the box (stays in the browser until you click Deploy)
+  async function loadEnvFile(file) {
+    if (!file) return;
+    if (file.size > 256 * 1024) return toast('That file is too big for a .env (max 256 KB)', 'err');
+    const text = await file.text();
+    if (text.includes('\0')) return toast('That is not a text file', 'err');
+    const keys = text.split(/\r?\n/).filter((l) => /^\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/.test(l));
+    if (!keys.length) return toast(`No KEY=value lines found in ${file.name}`, 'err');
+    const box = $('apEnv');
+    box.value = box.value.trim() ? box.value.replace(/\s*$/, '\n') + text : text;
+    toast(`Loaded ${keys.length} variable(s) from ${file.name}`, 'ok');
   }
 
   function setApSource(src) {

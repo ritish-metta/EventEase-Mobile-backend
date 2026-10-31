@@ -727,3 +727,7 @@ table.files td { padding: 9px 12px; }
 #apEnv { width: 100%; font: 12.5px ui-monospace, Consolas, monospace; }
 .form > span { display: block; min-width: 0; }
 .form > span > input, .form > span > select { width: 100%; }
+
+.dp-step .spacer { flex: 1; }
+.dp-step .sm { font-weight: 500; padding: 6px 12px; font-size: 12.5px; }
+#apEnv.drop { outline: 2px dashed var(--muted); outline-offset: 2px; }
