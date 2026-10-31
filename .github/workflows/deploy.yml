@@ -78,11 +78,6 @@ jobs:
             fi
             pm2 save
 
-            # keep the ops agent (control panel) up to date too, if it's installed
-            if pm2 describe ops-agent > /dev/null 2>&1; then
-              (cd ops-agent && npm ci --omit=dev --no-audit --no-fund) && pm2 reload ops-agent
-            fi
-
             # health check: fail the pipeline if the app doesn't come up
             for i in $(seq 1 15); do
               if curl -sf http://localhost:5000/api > /dev/null; then
