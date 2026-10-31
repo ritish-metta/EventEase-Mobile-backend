@@ -389,7 +389,10 @@ app.post('/api/system/kill', (req, res) => {
 
 // ── Projects ────────────────────────────────
 app.get('/api/projects', async (req, res) => {
-  res.json({ success: true, projects: await getProjects({ withGit: true }) });
+  // The panel itself (ops-agent, ~/opsedge) is not shown as a project: it can't be
+  // stopped or removed anyway, and editing its files from here could break the panel.
+  const projects = (await getProjects({ withGit: true })).filter((p) => !p.isAgent);
+  res.json({ success: true, projects });
 });
 
 app.post('/api/projects', async (req, res) => {
