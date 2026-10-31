@@ -742,3 +742,5 @@ For support, email ritishmetta@gmail.com or create an issue in the repository.
 ## ⭐ Star this repository if you found it helpful!
 
 **Made with ❤️ using Node.js, Express, and MongoDB**
+
+<sub>Deployed automatically by GitHub Actions to AWS EC2 (eu-north-1).</sub>
