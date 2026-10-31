@@ -1,9 +1,4 @@
-.env
-
-# Node dependencies
 node_modules/
-
-backend/routes/childSafety.js
-eventlistdashboard.html
-hikvision_dashboard.html
-sos-dashboard.html
+.env
+# runtime data written by the panel (settings, monitors, metrics, audit log)
+data/

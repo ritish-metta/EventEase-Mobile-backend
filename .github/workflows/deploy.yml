@@ -1,4 +1,4 @@
-name: CI/CD - Deploy to Server
+name: CI/CD - Deploy OpsEdge to Server
 
 on:
   push:
@@ -27,7 +27,9 @@ jobs:
         run: npm ci
 
       - name: Syntax check
-        run: node --check app.js
+        run: |
+          node --check server.js
+          for f in features/*.js public/js/*.js; do node --check "$f"; done
 
       # Deploy gate: set "enabled": false in deploy.json to skip deploying
       - name: Read deploy gate
@@ -40,7 +42,7 @@ jobs:
   deploy:
     name: Deploy to instance
     needs: build
-    # Two off switches — either one set to false skips the deploy:
+    # Two off switches, either one set to false skips the deploy:
     #   1. deploy.json → "enabled": false            (in the code)
     #   2. GitHub repo variable DEPLOY_ENABLED=false (Settings → Secrets and variables → Actions → Variables)
     if: needs.build.outputs.enabled == 'true' && vars.DEPLOY_ENABLED != 'false'
@@ -55,38 +57,26 @@ jobs:
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
             set -e
-            cd ${{ secrets.APP_DIR }}
+            DIR="$HOME/opsedge"
+            # first deploy: get the code
+            if [ ! -d "$DIR/.git" ]; then
+              git clone "https://github.com/${{ github.repository }}.git" "$DIR"
+            fi
+            cd "$DIR"
             git fetch origin main
             git reset --hard origin/main
-            npm ci --omit=dev
-            APP=eventease_backend
-            STATUS=$(pm2 jlist | node -e "
-              const list = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-              const mine = list.filter((p) => p.name === '$APP');
-              console.log(!mine.length ? 'missing' : mine.some((p) => p.pm2_env.status === 'online') ? 'online' : 'stopped');
-            ")
-            echo "Current status: $STATUS"
-            if [ "$STATUS" = "missing" ]; then
-              # not registered in pm2 at all → create it
-              pm2 start app.js -i 1 --name $APP
-            elif [ "$STATUS" = "online" ]; then
-              # running → zero-downtime reload
-              pm2 reload $APP --update-env
-            else
-              # stopped / errored → start it again
-              pm2 restart $APP --update-env
-            fi
-            pm2 save
+            bash install.sh
 
-            # health check: fail the pipeline if the app doesn't come up
+            # health check: fail the pipeline if the panel doesn't come up
+            PORT=$(grep -E '^OPS_PORT=' .env | cut -d= -f2)
             for i in $(seq 1 15); do
-              if curl -sf http://localhost:5000/api > /dev/null; then
-                echo "✅ App is up"
+              if curl -sf "http://localhost:${PORT:-7000}/api/health" > /dev/null; then
+                echo "✅ OpsEdge is up"
                 exit 0
               fi
               sleep 2
             done
-            echo "❌ App did not respond on port 5000 after deploy"
+            echo "❌ OpsEdge did not respond after deploy"
             pm2 list
-            pm2 logs $APP --lines 40 --nostream
+            pm2 logs ops-agent --lines 40 --nostream
             exit 1
