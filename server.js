@@ -412,27 +412,95 @@ app.get('/api/projects', async (req, res) => {
   res.json({ success: true, projects });
 });
 
-app.post('/api/projects', async (req, res) => {
-  const { name, repo, branch = 'main', script = 'app.js', dir, instances = 1, cluster = false } = req.body || {};
-  if (!NAME_RE.test(name || '')) throw new HttpError(400, 'Name: letters, numbers, . _ - only');
-  if (!REPO_RE.test(repo || '')) throw new HttpError(400, 'Repo must be an https:// or git@ URL');
-  if (!BRANCH_RE.test(branch)) throw new HttpError(400, 'Invalid branch');
-  if (!SCRIPT_RE.test(script) || script.includes('..')) throw new HttpError(400, 'Invalid start script');
-  const n = parseInt(instances, 10);
-  if (!Number.isInteger(n) || n < 1 || n > 8) throw new HttpError(400, 'Instances must be 1–8');
-  const target = insideHome(dir || name);
-  if (!target || target === HOME) throw new HttpError(400, `Folder must be inside ${HOME}`);
-  if ((await getProjects()).some((p) => p.name === name)) throw new HttpError(409, `A PM2 project named "${name}" already exists`);
+// ── New project (Railway-style form) ────────
+// source "git": clone (or pull) a repo · source "folder": a folder already uploaded in Files.
+// Then: write .env (merged with an existing one) → install → build → start under PM2 → save.
+const CMD_MAX = 300;
+const cleanCmd = (c, what) => {
+  const s = String(c ?? '').trim();
+  if (s.length > CMD_MAX || /[\r\n]/.test(s)) throw new HttpError(400, `${what}: one line, at most ${CMD_MAX} characters`);
+  return s;
+};
 
-  const job = startJob(`Add project ${name}`, [
+// "npm start" / "node server.js" / anything → the pm2 command that runs it
+function pm2StartFor(cmd, name, instances) {
+  const cluster = instances > 1 ? ` -i ${instances}` : '';
+  let m;
+  if ((m = cmd.match(/^node\s+([\w./-]+)$/)) && !m[1].includes('..')) return `pm2 start ${q(m[1])} --name ${q(name)}${cluster}`;
+  if ((m = cmd.match(/^(npm|yarn|pnpm)\s+start$/))) return `pm2 start ${m[1]} --name ${q(name)} -- start`;
+  if ((m = cmd.match(/^(npm|yarn|pnpm)\s+run\s+([\w:.-]+)$/))) return `pm2 start ${m[1]} --name ${q(name)} -- run ${q(m[2])}`;
+  return `pm2 start ${q(cmd)} --name ${q(name)}`; // any other command, run through the shell
+}
+
+// KEY=value lines → Map (comments and blank lines skipped)
+function parseEnv(text) {
+  const out = new Map();
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/);
+    if (m) out.set(m[1], m[2].trim());
+  }
+  return out;
+}
+
+app.post('/api/projects', async (req, res) => {
+  const b = req.body || {};
+  const source = b.source === 'folder' ? 'folder' : 'git';
+  const { name, repo, branch = 'main' } = b;
+  if (!NAME_RE.test(name || '')) throw new HttpError(400, 'Name: letters, numbers, . _ - only');
+  const projects = await getProjects();
+  if (projects.some((p) => p.name === name)) throw new HttpError(409, `A project named "${name}" already exists`);
+
+  let target;
+  if (source === 'git') {
+    if (!REPO_RE.test(repo || '')) throw new HttpError(400, 'Repo must be an https:// or git@ URL');
+    if (!BRANCH_RE.test(branch)) throw new HttpError(400, 'Invalid branch');
+    target = insideHome(b.dir || name);
+  } else {
+    target = insideHome(b.dir || '');
+    if (target && (!fs.existsSync(target) || !fs.statSync(target).isDirectory())) throw new HttpError(404, 'Folder not found. Upload it in Files first');
+  }
+  if (!target || target === HOME || isProtected(target)) throw new HttpError(400, `Pick a project folder inside ${HOME}`);
+  const same = projects.find((p) => p.cwd === target);
+  if (same) throw new HttpError(409, `That folder already runs as "${same.name}". Use Restart in Projects`);
+
+  const install = cleanCmd(b.installCmd, 'Install command');
+  const build = cleanCmd(b.buildCmd, 'Build command');
+  // old clients send `script` (a start file)
+  const startCmd = cleanCmd(b.startCmd || (b.script ? `node ${b.script}` : 'npm start'), 'Start command');
+  const n = parseInt(b.instances, 10) || 1;
+  if (n < 1 || n > 8) throw new HttpError(400, 'Instances must be 1–8');
+  if (n > 1 && !/^node\s+\S+$/.test(startCmd)) throw new HttpError(400, 'More than 1 instance needs a start command like "node server.js"');
+
+  // environment: what is in the form wins over an existing .env, other keys are kept
+  const env = parseEnv(b.env);
+  if (b.port !== undefined && String(b.port).trim() !== '') {
+    const port = parseInt(b.port, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || port === PORT) throw new HttpError(400, `Port must be 1–65535 and not ${PORT} (the panel)`);
+    env.set('PORT', String(port));
+  }
+  let envB64 = '';
+  if (env.size) {
+    const envFile = path.join(target, '.env');
+    const merged = fs.existsSync(envFile) ? parseEnv(fs.readFileSync(envFile, 'utf8')) : new Map();
+    for (const [k, v] of env) merged.set(k, v);
+    envB64 = Buffer.from([...merged].map(([k, v]) => `${k}=${v}`).join('\n') + '\n').toString('base64');
+  }
+
+  const job = startJob(`Deploy ${name}`, [
     'set -e',
-    `if [ -d ${q(target + '/.git')} ]; then echo "Folder exists, pulling latest"; cd ${q(target)}; git pull; else git clone --branch ${q(branch)} ${q(repo)} ${q(target)}; cd ${q(target)}; fi`,
-    installCmd,
-    `pm2 start ${q(script)} --name ${q(name)}${cluster ? ` -i ${n}` : ''}`,
+    source === 'git'
+      ? `if [ -d ${q(target + '/.git')} ]; then echo "📥 Folder exists, pulling latest"; cd ${q(target)}; git pull; else echo "📥 Cloning ${repo.replace(/[^\w@:/.~-]/g, '')}"; git clone --branch ${q(branch)} ${q(repo)} ${q(target)}; cd ${q(target)}; fi`
+      : `cd ${q(target)}`,
+    envB64 ? `echo "🔑 Writing .env (${env.size} variable(s) from the form)"; echo ${q(envB64)} | base64 -d > .env; chmod 600 .env` : 'true',
+    `echo "📦 Installing: ${install ? install.replace(/["`$\\]/g, '') : 'auto (npm ci / npm install)'}"`,
+    install || installCmd,
+    build ? `echo "🔨 Building: ${build.replace(/["`$\\]/g, '')}"; ${build}` : 'true',
+    `echo "🚀 Starting: ${startCmd.replace(/["`$\\]/g, '')}"`,
+    pm2StartFor(startCmd, name, n),
     'pm2 save',
-    `echo "✅ ${name} is running"`,
-  ].join('\n'));
-  res.json({ success: true, message: `Adding ${name}…`, jobId: job.id });
+    `echo "✅ ${name} is running. See it in Projects."`,
+  ].join('\n'), { project: name, kind: 'start' });
+  res.json({ success: true, message: `Deploying ${name}…`, jobId: job.id });
 });
 
 app.post('/api/projects/:name/:action', async (req, res) => {

@@ -143,7 +143,7 @@
           <label class="switch" title="Refresh data every 5 seconds"><input type="checkbox" id="autoRefresh" checked><span class="track"></span><span class="switch-label">Live</span></label>
           <button type="button" class="b-outline" onclick="openSearch()" title="Search (Ctrl+K)"><svg class="ic"><use href="#i-search"/></svg><span>Search</span><kbd>Ctrl K</kbd></button>
           <button type="button" class="b-outline" onclick="showTab('settings')"><svg class="ic"><use href="#i-gear"/></svg><span>Settings</span></button>
-          <button type="button" class="b-gradient" onclick="openQuickDeploy()"><svg class="ic"><use href="#i-plus"/></svg><span>Deploy a project</span></button>
+          <button type="button" class="b-gradient" onclick="openAddProject()"><svg class="ic"><use href="#i-plus"/></svg><span>Deploy a project</span></button>
         </div>
       </div>
 
@@ -629,9 +629,9 @@
           <div class="card guide">
             <div class="card-head"><h2>2a. Deploy a project from git</h2></div>
             <ol>
-              <li>Click <b>Deploy a project</b> (top right).</li>
-              <li>Fill in a name, the repo URL, the branch and the start file (for example <code>app.js</code>).</li>
-              <li>OpsEdge clones it into your home folder, installs packages and starts it with PM2.</li>
+              <li>Click <b>Deploy a project</b> (top right) and pick <b>GitHub repo</b>.</li>
+              <li>Paste the repo URL. Check the <b>start command</b> (<code>npm start</code> works for most projects) and paste your <b>.env</b> lines if it needs any.</li>
+              <li>Click <b>Deploy</b>. OpsEdge clones it, installs packages, builds (if you set a build command) and starts it with PM2.</li>
               <li>Later updates: <b>Projects → Deploy</b> pulls the latest code and restarts it.</li>
             </ol>
           </div>
@@ -640,11 +640,8 @@
             <ol>
               <li>Open <b>Build → Files</b> and stay in the home folder.</li>
               <li>Drag your project folder onto the Files card (node_modules and .git are skipped).</li>
-              <li>Open <b>Build → Terminal</b> and run:<br>
-                <code>cd ~/my-app</code><br>
-                <code>npm install</code> (only if it has packages)<br>
-                <code>pm2 start app.js --name my-app</code><br>
-                <code>pm2 save</code></li>
+              <li>Click <b>Deploy a project</b> (top right), pick <b>Uploaded folder</b> and choose it.</li>
+              <li>The start command is read from its <code>package.json</code>. Paste your <b>.env</b> lines if it needs any, then click <b>Deploy</b>. No terminal needed.</li>
               <li>It now shows in <b>Monitor → Projects</b>. To update: upload the changed files again, then <b>Restart</b>.</li>
             </ol>
           </div>

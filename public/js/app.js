@@ -550,27 +550,132 @@
     act(`/projects/${encodeURIComponent(name)}/scale`, { instances: +n }).then((r) => r && setTimeout(loadProjects, 3000));
   }
 
-  function openAddProject() {
-    openModal('Add project', `
-      <div class="form">
-        <label for="apName">Name</label><input id="apName" placeholder="my-api">
-        <label for="apRepo">Git repo URL</label><input id="apRepo" placeholder="https://github.com/you/repo.git">
-        <label for="apBranch">Branch</label><input id="apBranch" value="main">
-        <label for="apScript">Start file</label><input id="apScript" value="app.js">
-        <label for="apDir">Folder</label><input id="apDir" placeholder="(default: ~/name)">
-        <label for="apCluster">Cluster mode</label><span><input type="checkbox" id="apCluster"> instances <input id="apInst" type="number" min="1" max="8" value="1" style="width:70px"></span>
+  // ── New project: Railway-style deploy form ──
+  // Source (GitHub repo or an uploaded folder) → start command (read from package.json,
+  // with one-click hints) → optional install / build commands, port and env variables.
+  let apSource = 'git';
+  const START_HINTS = ['npm start', 'node server.js', 'node app.js', 'node index.js', 'npm run dev', 'npm run prod'];
+  const hintChips = (target, list) => list.map((h) =>
+    `<button type="button" class="hint-chip" onclick="setField('${target}', ${esc(JSON.stringify(h))})">${esc(h)}</button>`).join('');
+  function setField(id, v) { $(id).value = v; $(id).focus(); }
+
+  async function openAddProject() {
+    openModal('Deploy a project', `
+      <div class="seg" id="apSeg">
+        <button type="button" data-src="git" onclick="setApSource('git')">${ic('git')}GitHub repo</button>
+        <button type="button" data-src="folder" onclick="setApSource('folder')">${ic('folder')}Uploaded folder</button>
       </div>
-      <p class="muted">Private repos need a deploy key on this server (Settings → Deploy keys on GitHub).
-      After it's added, create the project's .env with the ".env" button and press Restart.</p>`,
-      '<button type="button" class="b-green" onclick="addProject()">Add &amp; start</button>');
+
+      <div class="dp-step"><b>1</b><span>Source</span></div>
+      <div id="apGit" class="form">
+        <label for="apRepo">Repo URL</label><input id="apRepo" placeholder="https://github.com/you/repo.git" oninput="apAutoName()">
+        <label for="apBranch">Branch</label><input id="apBranch" value="main">
+      </div>
+      <div id="apFolderBox" class="form" hidden>
+        <label for="apFolder">Folder</label>
+        <span><select id="apFolder" onchange="apFolderPicked()"><option value="">Loading…</option></select>
+          <span class="muted small">Not there? Upload it in <a href="#" onclick="event.preventDefault(); closeModal(); showTab('files')">Files</a> first.</span></span>
+      </div>
+      <div class="form mt">
+        <label for="apName">Project name</label><input id="apName" placeholder="my-app">
+      </div>
+
+      <div class="dp-step"><b>2</b><span>How to run it</span></div>
+      <div class="form">
+        <label for="apStart">Start command</label>
+        <span><input id="apStart" value="npm start" placeholder="npm start">
+          <span class="hints" id="apStartHints">${hintChips('apStart', START_HINTS)}</span>
+          <span class="muted small" id="apDetected">The command you would type to run the app. <code>npm start</code> works for most Node projects.</span></span>
+        <label for="apInstall">Install command</label>
+        <span><input id="apInstall" placeholder="auto: npm ci / npm install">
+          <span class="hints">${hintChips('apInstall', ['npm install', 'npm ci', 'yarn', 'pnpm install'])}</span></span>
+        <label for="apBuild">Build command</label>
+        <span><input id="apBuild" placeholder="none">
+          <span class="hints">${hintChips('apBuild', ['npm run build'])}</span>
+          <span class="muted small">Only for apps that need a build step (React, Next.js, TypeScript…).</span></span>
+        <label for="apPort">Port</label>
+        <span><input id="apPort" type="number" min="1" max="65535" placeholder="leave empty: the app's own default (often 3000)">
+          <span class="muted small">Sets <code>PORT</code>. Two apps can't use the same port. Open it in AWS (security group) to reach the app.</span></span>
+      </div>
+
+      <div class="dp-step"><b>3</b><span>Environment variables <span class="muted">(optional)</span></span></div>
+      <textarea id="apEnv" rows="5" spellcheck="false" placeholder="Paste your .env here, one per line:
+MONGODB_URI=mongodb+srv://user:pass@cluster/db
+API_KEY=..."></textarea>
+      <p class="muted small">Saved to the project's <code>.env</code>. Keys already in an existing .env are kept unless you set them here.</p>
+
+      <details class="mt"><summary class="muted">Advanced</summary>
+        <div class="form mt">
+          <label for="apDir">Clone into</label><input id="apDir" placeholder="(default: ~/project-name)">
+          <label for="apInst">Instances</label><span><input id="apInst" type="number" min="1" max="8" value="1" style="width:80px">
+            <span class="muted small">More than 1 runs cluster mode (needs a start command like <code>node server.js</code>).</span></span>
+        </div>
+      </details>`,
+      `<button type="button" class="b-gradient" id="apGo" onclick="addProject()">${ic('rocket')}<span>Deploy</span></button>`);
+    $('apName').addEventListener('input', () => { $('apName').dataset.touched = '1'; });
+    setApSource(apSource);
+  }
+
+  function setApSource(src) {
+    apSource = src;
+    document.querySelectorAll('#apSeg button').forEach((b) => b.classList.toggle('active', b.dataset.src === src));
+    $('apGit').hidden = src !== 'git';
+    $('apFolderBox').hidden = src !== 'folder';
+    $('apDir').closest('details').querySelector('label[for=apDir]').hidden = src !== 'git';
+    $('apDir').hidden = src !== 'git';
+    if (src === 'folder') loadApFolders();
+  }
+
+  function apAutoName() {
+    const m = $('apRepo').value.trim().match(/([\w.-]+?)(?:\.git)?\/?$/);
+    if (m && !$('apName').dataset.touched) $('apName').value = m[1];
+  }
+
+  async function loadApFolders() {
+    try {
+      const r = await api('/files?path=');
+      const used = new Set(projects.map((p) => p.cwd));
+      const dirs = r.entries.filter((e) => e.type === 'dir' && !e.name.startsWith('.'))
+        .map((e) => r.path.replace(/\/$/, '') + '/' + e.name).filter((d) => !used.has(d));
+      $('apFolder').innerHTML = dirs.length
+        ? '<option value="">Pick a folder…</option>' + dirs.map((d) => `<option value="${esc(d)}">${esc(d.split('/').pop())}</option>`).join('')
+        : '<option value="">No free folders: upload one in Files</option>';
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // Read package.json of the picked folder: name, start script, other scripts as hints
+  async function apFolderPicked() {
+    const dir = $('apFolder').value;
+    if (!dir) return;
+    if (!$('apName').dataset.touched) $('apName').value = dir.split('/').pop().replace(/[^\w.-]/g, '-');
+    try {
+      const f = await api('/files?path=' + encodeURIComponent(dir + '/package.json'));
+      const pkg = JSON.parse(f.content);
+      const scripts = pkg.scripts || {};
+      const hints = [...new Set([scripts.start ? 'npm start' : null, ...Object.keys(scripts).filter((k) => k !== 'start' && !/^(test|lint|build|pre|post)/.test(k)).map((k) => 'npm run ' + k),
+        pkg.main ? 'node ' + pkg.main : null, ...START_HINTS].filter(Boolean))].slice(0, 8);
+      $('apStartHints').innerHTML = hintChips('apStart', hints);
+      $('apStart').value = scripts.start ? 'npm start' : pkg.main ? 'node ' + pkg.main : 'npm start';
+      $('apDetected').innerHTML = scripts.start
+        ? `Found in package.json: <code>start</code> runs <code>${esc(scripts.start)}</code>`
+        : `${ic('alert')} package.json has no <code>start</code> script. Pick the file that starts the app, e.g. <code>node server.js</code>.`;
+      if (scripts.build && !$('apBuild').value) $('apDetected').innerHTML += ` · it also has a <code>build</code> script, add <code>npm run build</code> if it needs one.`;
+    } catch {
+      $('apDetected').innerHTML = `${ic('alert')} No package.json in this folder. Type the command that starts the app.`;
+    }
   }
 
   async function addProject() {
-    const r = await act('/projects', {
-      name: $('apName').value.trim(), repo: $('apRepo').value.trim(), branch: $('apBranch').value.trim(),
-      script: $('apScript').value.trim(), dir: $('apDir').value.trim() || undefined,
-      cluster: $('apCluster').checked, instances: +$('apInst').value,
-    });
+    const body = {
+      source: apSource, name: $('apName').value.trim(),
+      startCmd: $('apStart').value.trim(), installCmd: $('apInstall').value.trim(), buildCmd: $('apBuild').value.trim(),
+      port: $('apPort').value.trim(), env: $('apEnv').value, instances: +$('apInst').value || 1,
+    };
+    if (apSource === 'git') Object.assign(body, { repo: $('apRepo').value.trim(), branch: $('apBranch').value.trim() || 'main', dir: $('apDir').value.trim() || undefined });
+    else body.dir = $('apFolder').value;
+    if (apSource === 'folder' && !body.dir) return toast('Pick the uploaded folder', 'err');
+    if (!body.name) return toast('Give the project a name', 'err');
+    const r = await act('/projects', body);
     if (r) { closeModal(); showTab('activity'); }
   }
 
@@ -1143,7 +1248,7 @@
      ['Redis', 'database', 'c-blue', 'Cache browser', () => showTab('redis')],
      ['Cron jobs', 'timer', 'c-yellow', 'Scheduled tasks', () => showTab('cron')],
      ['Security', 'shield', 'c-pink', 'Audit & logins', () => showTab('security')]],
-    [['Add project', 'plus', 'c-lav', 'Clone & start', () => openAddProject()],
+    [['Add project', 'plus', 'c-lav', 'Repo or folder', () => openAddProject()],
      ['Deploy', 'rocket', 'c-mint', 'Pull latest code', () => openQuickDeploy()],
      ['Clean logs', 'broom', 'c-sand', 'Free disk space', () => serverAction('clean-logs', 'Clear all PM2 logs?')],
      ['Alerts', 'bell', 'c-yellow', 'What needs attention', () => openAlerts()]],

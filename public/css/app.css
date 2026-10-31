@@ -713,3 +713,17 @@ table.files td { padding: 9px 12px; }
 .crumb-preview { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .crumb-preview:hover, .crumb-preview.on { color: var(--text); border-color: var(--muted); }
 .crumbs-bar .crumb-preview .ic { width: 13px; height: 13px; color: inherit; }
+
+/* Deploy form (Railway style) */
+.seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--line); margin-bottom: 6px; }
+.seg button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+.seg button.active { background: var(--card); color: var(--text); box-shadow: var(--soft-shadow); }
+.seg .ic { width: 15px; height: 15px; }
+.dp-step { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; font-weight: 600; }
+.dp-step b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--text); color: var(--card); font-size: 12px; }
+.hints { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.hint-chip { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font: 12px ui-monospace, Consolas, monospace; cursor: pointer; }
+.hint-chip:hover { color: var(--text); border-color: var(--muted); }
+#apEnv { width: 100%; font: 12.5px ui-monospace, Consolas, monospace; }
+.form > span { display: block; min-width: 0; }
+.form > span > input, .form > span > select { width: 100%; }
